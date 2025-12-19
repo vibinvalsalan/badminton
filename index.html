@@ -99,16 +99,14 @@
 
     <script>
         // --- CONFIGURATION ---
-        const SB_URL = 'https://vooteblzthdcekgqjorg.supabase.co';
-        const SB_KEY = 'sb_publishable_8zkrYhskZwDTWWDJh0o2aw_a6p48lWx';
-        const _supabase = supabase.createClient(SB_URL, SB_KEY);
+// --- CONFIGURATION ---
+const SB_URL = 'https://vooteblzthdcekgqjorg.supabase.co';
+const SB_KEY = 'sb_publishable_8zkrYhskZwDTWWDJh0o2aw_a6p48lWx';
+const _supabase = supabase.createClient(SB_URL, SB_KEY);
 
-        let allData = [];
-        let currentSessionId = null;
-        let isAdmin = localStorage.getItem('isAdmin') === 'true';
-
-        // --- NAVIGATION ---
-
+let allData = [];
+let currentSessionId = null;
+let isAdmin = localStorage.getItem('isAdmin') === 'true';
 
 // --- PAGE NAVIGATION ---
 function hideAllViews() {
@@ -118,10 +116,12 @@ function hideAllViews() {
 }
 
 function handleBack() {
-    // If in Admin Editor, go back to Admin Dashboard
+    // If we are in the Admin Editor, go back to Admin Dashboard
     if (!document.getElementById('admin-editor').classList.contains('hidden')) {
         closeEditor();
-    } else {
+    } 
+    // If we are on the Admin Dashboard or Session Detail, go back to Home
+    else {
         showHome();
     }
 }
@@ -131,6 +131,7 @@ function showHome() {
     document.getElementById('view-home').classList.remove('hidden');
     document.getElementById('nav-title').innerText = "🏸 Badminton";
     currentSessionId = null;
+    renderSessions();
 }
 
 function goToAdmin() {
@@ -144,6 +145,9 @@ function goToAdmin() {
         document.getElementById('admin-auth').classList.add('hidden');
         document.getElementById('admin-dashboard').classList.remove('hidden');
         renderAdminDashboard();
+    } else {
+        document.getElementById('admin-auth').classList.remove('hidden');
+        document.getElementById('admin-dashboard').classList.add('hidden');
     }
 }
 
@@ -195,12 +199,37 @@ function showSessionForm(id = null) {
 function closeEditor() {
     document.getElementById('admin-editor').classList.add('hidden');
     document.getElementById('admin-dashboard').classList.remove('hidden');
+    renderAdminDashboard();
+}
+
+async function saveSession() {
+    const sessionId = document.getElementById('edit-id').value;
+    const sessionData = {
+        date: document.getElementById('f-date').value,
+        time: document.getElementById('f-time').value,
+        location: document.getElementById('f-loc').value,
+        capacity: parseInt(document.getElementById('f-cap').value),
+        fee: document.getElementById('f-fee').value
+    };
+
+    try {
+        if (sessionId) {
+            await _supabase.from('sessions').update(sessionData).eq('id', sessionId);
+        } else {
+            await _supabase.from('sessions').insert([sessionData]);
+        }
+        Swal.fire({ toast: true, position: 'top', icon: 'success', title: 'Session Saved!', showConfirmButton: false, timer: 1500 });
+        closeEditor();
+        loadData();
+    } catch (err) {
+        Swal.fire('Error', 'Could not save session', 'error');
+    }
 }
 
 async function deleteSession(id) {
     const { isConfirmed } = await Swal.fire({
         title: 'Delete Session?',
-        text: "This will remove all players and logs for this session.",
+        text: "This will remove all players for this session.",
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#ef4444',
@@ -210,91 +239,84 @@ async function deleteSession(id) {
     if (isConfirmed) {
         await _supabase.from('sessions').delete().eq('id', id);
         loadData();
-        goToAdmin();
+        renderAdminDashboard();
     }
 }
 
+function verifyAdmin() {
+    if (document.getElementById('admin-pass').value === 'admin123') {
+        isAdmin = true;
+        localStorage.setItem('isAdmin', 'true');
+        goToAdmin();
+    } else {
+        Swal.fire('Error', 'Incorrect Password', 'error');
+    }
+}
 
+function logoutAdmin() {
+    isAdmin = false;
+    localStorage.removeItem('isAdmin');
+    location.reload();
+}
 
+// --- DATA FETCHING ---
+async function loadData() {
+    const { data, error } = await _supabase
+        .from('sessions')
+        .select('*, registrations(*)');
 
-        function showDetail(id) {
-            currentSessionId = id;
-            document.getElementById('view-home').classList.add('hidden');
-            document.getElementById('view-detail').classList.remove('hidden');
-            document.getElementById('back-btn').classList.remove('hidden');
-            renderDetailPage();
-        }
+    if (error) return console.error(error);
 
-        // --- DATA FETCHING ---
-        async function loadData() {
-            document.getElementById('loading').classList.remove('hidden');
-            const { data, error } = await _supabase
-                .from('sessions')
-                .select('*, registrations(*)');
+    allData = data.map(s => ({
+        ...s,
+        players: s.registrations.filter(r => r.status === 'Confirmed').sort((a,b) => new Date(a.created_at) - new Date(b.created_at)),
+        waitlist: s.registrations.filter(r => r.status === 'Waitlist').sort((a,b) => new Date(a.created_at) - new Date(b.created_at))
+    }));
 
-            if (error) {
-                console.error(error);
-                return;
-            }
+    renderSessions();
+    if (currentSessionId) renderDetailPage();
+    if (isAdmin && !document.getElementById('view-admin').classList.contains('hidden')) renderAdminDashboard();
+}
 
-            allData = data.map(s => ({
-                ...s,
-                players: s.registrations.filter(r => r.status === 'Confirmed').sort((a,b) => new Date(a.created_at) - new Date(b.created_at)),
-                waitlist: s.registrations.filter(r => r.status === 'Waitlist').sort((a,b) => new Date(a.created_at) - new Date(b.created_at))
-            }));
+// --- PUBLIC RENDERING (HOME & DETAIL) ---
+function renderSessions() {
+    const list = document.getElementById('session-list');
+    list.innerHTML = '';
+    
+    allData.forEach(s => {
+        const spotsLeft = Math.max(0, s.capacity - s.players.length);
+        const card = document.createElement('div');
+        card.className = "bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center cursor-pointer active:scale-95 transition-all";
+        card.onclick = () => showDetail(s.id);
+        card.innerHTML = `
+            <div>
+                <p class="text-[10px] font-black text-blue-600 uppercase tracking-widest">${s.date}</p>
+                <h3 class="text-xl font-black text-gray-800">${s.time}</h3>
+                <p class="text-sm text-gray-400 font-medium">${s.location}</p>
+            </div>
+            <div class="flex flex-col items-end">
+                <span class="text-[10px] font-bold px-3 py-1 rounded-full uppercase ${spotsLeft > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
+                    ${spotsLeft > 0 ? spotsLeft + ' Left' : 'Full'}
+                </span>
+            </div>
+        `;
+        list.appendChild(card);
+    });
+}
 
-            renderSessions();
-            if (currentSessionId) renderDetailPage();
-            document.getElementById('loading').classList.add('hidden');
-        }
-
-        // --- RENDERING ---
-        function renderSessions() {
-            const list = document.getElementById('session-list');
-            list.innerHTML = '';
-            
-            allData.forEach(s => {
-                const spotsLeft = Math.max(0, s.capacity - s.players.length);
-                const card = document.createElement('div');
-                card.className = "bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center cursor-pointer active:scale-95 transition-all";
-                card.onclick = () => showDetail(s.id);
-                card.innerHTML = `
-                    <div>
-                        <p class="text-[10px] font-black text-blue-600 uppercase tracking-widest">${s.date}</p>
-                        <h3 class="text-xl font-black text-gray-800">${s.time}</h3>
-                        <p class="text-sm text-gray-400 font-medium">${s.location}</p>
-                    </div>
-                    <div class="flex flex-col items-end">
-                        <span class="text-[10px] font-bold px-3 py-1 rounded-full uppercase ${spotsLeft > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
-                            ${spotsLeft > 0 ? spotsLeft + ' Left' : 'Full'}
-                        </span>
-                    </div>
-                `;
-                list.appendChild(card);
-            });
-        }
+function showDetail(id) {
+    currentSessionId = id;
+    hideAllViews();
+    document.getElementById('view-detail').classList.remove('hidden');
+    document.getElementById('back-btn').classList.remove('hidden');
+    renderDetailPage();
+}
 
 function renderDetailPage() {
     const s = allData.find(x => x.id === currentSessionId);
     if (!s) return showHome();
-
     const isFull = s.players.length >= s.capacity;
     
-    // Players and Waitlist rendering logic (keep as before or style similarly)
-    const playersHtml = s.players.map(p => `
-        <div class="flex justify-between items-center p-3 bg-white border-b border-gray-100 last:border-0">
-            <span class="font-semibold text-gray-700">${p.player_name}</span>
-            <div class="flex items-center gap-3">
-                <button onclick="handlePayment('${p.id}', '${p.payment_status}')" class="text-[10px] px-3 py-1 rounded-full font-bold ${p.payment_status === 'Paid' ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-400'}">
-                    ${p.payment_status === 'Paid' ? 'PAID' : 'PAY'}
-                </button>
-                <button onclick="handleRemoval('${p.id}', '${s.id}', '${p.player_name}', 'Confirmed')" class="text-gray-300 hover:text-red-500">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                </button>
-            </div>
-        </div>
-    `).join('');
-
     document.getElementById('session-detail-content').innerHTML = `
         <div class="bg-white rounded-3xl shadow-xl overflow-hidden card-border-top p-6 animate-fadeIn">
             <div class="flex justify-between items-start mb-2">
@@ -302,280 +324,72 @@ function renderDetailPage() {
                     <p class="text-blue-600 font-black text-sm mb-1">${s.date}</p>
                     <h2 class="text-3xl font-black text-gray-900 leading-none">${s.time}</h2>
                 </div>
-                ${isFull ? `
-                    <span class="bg-red-50 text-red-500 text-[10px] font-black px-3 py-1 rounded-lg uppercase tracking-wider">
-                        Session Full
-                    </span>
-                ` : ''}
+                ${isFull ? `<span class="bg-red-50 text-red-500 text-[10px] font-black px-3 py-1 rounded-lg uppercase">Session Full</span>` : ''}
             </div>
-
-            <div class="flex items-center gap-1 text-gray-400 mb-6">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                <span class="text-sm font-medium">${s.location}</span>
+            <p class="text-sm text-gray-400 mb-6 font-medium">${s.location}</p>
+            <div class="bg-gray-50 rounded-2xl p-4 flex justify-between items-center mb-6">
+                <span class="text-gray-700 font-bold text-sm">💰 Fee: ${s.fee}</span>
+                <button onclick="copyToWhatsApp()" class="text-green-600 font-bold text-xs bg-green-50 px-3 py-2 rounded-xl">COPY LIST</button>
             </div>
-
-<div class="bg-gray-50 rounded-2xl p-4 flex justify-between items-center mb-6">
-    <div class="flex items-center gap-2">
-        <span class="text-lg">💰</span>
-        <span class="text-gray-700 font-bold text-sm">Fee: ${s.fee}</span>
-    </div>
-    <button onclick="copyToWhatsApp()" class="flex items-center gap-1 text-green-600 font-bold text-xs bg-green-50 px-3 py-2 rounded-xl active:scale-95 transition-all">
-        <span>💬</span> COPY LIST
-    </button>
-</div>
-
             <div class="flex gap-3 mb-8">
-                <input type="text" id="join-name" placeholder="Your Name" 
-                    class="flex-1 bg-white border-2 border-gray-100 rounded-2xl px-5 py-4 text-gray-700 focus:ring-2 focus:ring-blue-500 outline-none transition-all">
-                <button onclick="joinSession()" 
-                    class="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black tracking-widest uppercase shadow-lg active:scale-95 transition-all">
-                    ${isFull ? 'Waitlist' : 'Join'}
-                </button>
+                <input type="text" id="join-name" placeholder="Your Name" class="flex-1 bg-gray-50 rounded-2xl px-5 py-4 outline-none">
+                <button onclick="joinSession()" class="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black uppercase shadow-lg">${isFull ? 'Waitlist' : 'Join'}</button>
             </div>
-
-            <div class="mt-4">
-                <h4 class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">
-                    Confirmed Players (${s.players.length}/${s.capacity})
-                </h4>
-                <div class="rounded-2xl border border-gray-50 overflow-hidden shadow-sm">
-                    ${playersHtml || '<p class="p-4 text-center text-gray-400 text-sm italic">No players joined yet</p>'}
-                </div>
-            </div>
-            
-            ${s.waitlist.length > 0 ? `
-                <div class="mt-6">
-                    <h4 class="text-[10px] font-black text-orange-400 uppercase tracking-widest mb-3">Waitlist Queue</h4>
-                    <div class="rounded-2xl border border-orange-50 overflow-hidden bg-orange-50/30">
-                        ${s.waitlist.map((p, i) => `
-                            <div class="flex justify-between items-center p-3 border-b border-orange-50 last:border-0">
-                                <span class="text-sm font-bold text-orange-800">#${i+1} ${p.player_name}</span>
-                                <button onclick="handleRemoval('${p.id}', '${s.id}', '${p.player_name}', 'Waitlist')" class="text-[10px] text-orange-400 font-bold">CANCEL</button>
-                            </div>
-                        `).join('')}
+            <h4 class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Confirmed Players (${s.players.length}/${s.capacity})</h4>
+            <div class="space-y-2">
+                ${s.players.map(p => `
+                    <div class="flex justify-between items-center p-3 bg-white border border-gray-100 rounded-xl">
+                        <span class="font-semibold text-gray-700">${p.player_name}</span>
+                        <div class="flex gap-3">
+                            <button onclick="handlePayment('${p.id}', '${p.payment_status}')" class="text-[10px] px-3 py-1 rounded-full font-bold ${p.payment_status === 'Paid' ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-400'}">
+                                ${p.payment_status === 'Paid' ? 'PAID' : 'PAY'}
+                            </button>
+                            <button onclick="handleRemoval('${p.id}', '${s.id}', '${p.player_name}', 'Confirmed')" class="text-red-300 hover:text-red-500">×</button>
+                        </div>
                     </div>
-                </div>
-            ` : ''}
+                `).join('') || '<p class="text-gray-400 text-center italic">No players</p>'}
+            </div>
         </div>
     `;
 }
 
-        
-
-        // --- ACTIONS ---
-        async function joinSession() {
-            const name = document.getElementById('join-name').value.trim();
-            if (!name) return;
-
-            const s = allData.find(x => x.id === currentSessionId);
-            const status = s.players.length >= s.capacity ? 'Waitlist' : 'Confirmed';
-
-            await _supabase.from('registrations').insert([{ 
-                session_id: currentSessionId, player_name: name, status: status 
-            }]);
-            
-            Swal.fire({ toast: true, position: 'top', icon: 'success', title: 'Joined successfully!', showConfirmButton: false, timer: 2000 });
-            loadData();
-        }
-
-        async function handlePayment(id, current) {
-            await _supabase.from('registrations').update({ payment_status: current === 'Paid' ? 'Unpaid' : 'Paid' }).eq('id', id);
-            loadData();
-        }
-
-        async function handleRemoval(regId, sid, name, status) {
-            const result = await Swal.fire({ title: 'Remove?', text: name, icon: 'warning', showCancelButton: true });
-            if (!result.isConfirmed) return;
-
-            await _supabase.from('removed_log').insert([{ session_id: sid, player_name: name, original_status: status }]);
-            await _supabase.from('registrations').delete().eq('id', regId);
-
-            if (status === 'Confirmed') {
-                const { data: next } = await _supabase.from('registrations')
-                    .select('*').eq('session_id', sid).eq('status', 'Waitlist')
-                    .order('created_at', { ascending: true }).limit(1).maybeSingle();
-                
-                if (next) await _supabase.from('registrations').update({ status: 'Confirmed' }).eq('id', next.id);
-            }
-            loadData();
-        }
-
-        // --- ADMIN ---
-        function toggleAdminPanel() { document.getElementById('admin-modal').classList.toggle('hidden'); }
-        
-        function verifyAdmin() {
-            if (document.getElementById('admin-pass').value === 'admin123') {
-                isAdmin = true; localStorage.setItem('isAdmin', 'true');
-                document.getElementById('admin-login').classList.add('hidden');
-                document.getElementById('admin-controls').classList.remove('hidden');
-                loadData();
-            }
-        }
-
-        async function createSession() {
-            await _supabase.from('sessions').insert([{
-                date: document.getElementById('new-date').value,
-                time: document.getElementById('new-time').value,
-                location: document.getElementById('new-loc').value,
-                capacity: parseInt(document.getElementById('new-cap').value),
-                fee: document.getElementById('new-fee').value
-            }]);
-            toggleAdminPanel();
-            loadData();
-        }
-
-        // --- ADMIN VIEW CONTROLLERS ---
-
-function showDashboard() {
-    document.getElementById('admin-title').innerText = "Admin Console";
-    document.getElementById('admin-login').classList.add('hidden');
-    document.getElementById('admin-dashboard').classList.remove('hidden');
-    document.getElementById('admin-form').classList.add('hidden');
-    renderAdminSessionList();
-}
-
-function showCreateForm() {
-    document.getElementById('admin-title').innerText = "New Session";
-    document.getElementById('edit-session-id').value = ""; // Clear ID for "Create" mode
-    // Reset inputs
-    ['new-date', 'new-time', 'new-loc', 'new-cap', 'new-fee'].forEach(id => document.getElementById(id).value = "");
-    
-    document.getElementById('admin-dashboard').classList.add('hidden');
-    document.getElementById('admin-form').classList.remove('hidden');
-}
-
-function showEditForm(sessionId) {
-    const s = allData.find(x => x.id === sessionId);
-    document.getElementById('admin-title').innerText = "Edit Session";
-    document.getElementById('edit-session-id').value = s.id;
-    
-    // Fill inputs with existing data
-    document.getElementById('new-date').value = s.date;
-    document.getElementById('new-time').value = s.time;
-    document.getElementById('new-loc').value = s.location;
-    document.getElementById('new-cap').value = s.capacity;
-    document.getElementById('new-fee').value = s.fee;
-
-    document.getElementById('admin-dashboard').classList.add('hidden');
-    document.getElementById('admin-form').classList.remove('hidden');
-}
-
-// --- RENDER LIST IN ADMIN ---
-
-function renderAdminSessionList() {
-    const container = document.getElementById('admin-session-list');
-    container.innerHTML = '';
-    
-    allData.forEach(s => {
-        const div = document.createElement('div');
-        div.className = "flex justify-between items-center p-3 bg-gray-50 rounded-xl border border-gray-100";
-        div.innerHTML = `
-            <div class="text-sm">
-                <p class="font-bold text-gray-800">${s.date} @ ${s.time}</p>
-                <p class="text-[10px] text-gray-400 font-bold uppercase">${s.location}</p>
-            </div>
-            <button onclick="showEditForm('${s.id}')" class="bg-white border border-gray-200 px-3 py-1 rounded-lg text-[10px] font-black text-blue-600 hover:bg-blue-50">EDIT</button>
-        `;
-        container.appendChild(div);
-    });
-}
-
-// --- SAVE (CREATE OR UPDATE) LOGIC ---
-
-async function saveSession() {
-    const sessionId = document.getElementById('edit-session-id').value;
-    const sessionData = {
-        date: document.getElementById('new-date').value,
-        time: document.getElementById('new-time').value,
-        location: document.getElementById('new-loc').value,
-        capacity: parseInt(document.getElementById('new-cap').value),
-        fee: document.getElementById('new-fee').value
-    };
-
-    if (sessionId) {
-        // UPDATE Existing
-        await _supabase.from('sessions').update(sessionData).eq('id', sessionId);
-    } else {
-        // CREATE New
-        await _supabase.from('sessions').insert([sessionData]);
-    }
-
-    Swal.fire({ toast: true, position: 'top', icon: 'success', title: 'Session Saved!', showConfirmButton: false, timer: 1500 });
-    showDashboard();
+// --- USER ACTIONS ---
+async function joinSession() {
+    const name = document.getElementById('join-name').value.trim();
+    if (!name) return;
+    const s = allData.find(x => x.id === currentSessionId);
+    const status = s.players.length >= s.capacity ? 'Waitlist' : 'Confirmed';
+    await _supabase.from('registrations').insert([{ session_id: currentSessionId, player_name: name, status: status }]);
     loadData();
 }
 
-// --- UPDATE THE VERIFY FUNCTION ---
-function verifyAdmin() {
-    if (document.getElementById('admin-pass').value === 'admin123') {
-        isAdmin = true;
-        localStorage.setItem('isAdmin', 'true');
-        showDashboard(); // Move to dashboard instead of just showing controls
-    }
+async function handlePayment(id, current) {
+    await _supabase.from('registrations').update({ payment_status: current === 'Paid' ? 'Unpaid' : 'Paid' }).eq('id', id);
+    loadData();
 }
 
-        function logoutAdmin() {
-            isAdmin = false; localStorage.removeItem('isAdmin');
-            location.reload();
-        }
+async function handleRemoval(regId, sid, name, status) {
+    const result = await Swal.fire({ title: 'Remove?', text: name, icon: 'warning', showCancelButton: true });
+    if (!result.isConfirmed) return;
+    await _supabase.from('registrations').delete().eq('id', regId);
+    loadData();
+}
 
 async function copyToWhatsApp() {
     const s = allData.find(x => x.id === currentSessionId);
     if (!s) return;
-
-    // 1. Format Date to dd-mm-yyyy
-    // This assumes your date is stored in a format the browser can parse
-    let formattedDate = s.date; 
+    let formattedDate = s.date;
     try {
-        const dateObj = new Date(s.date);
-        if (!isNaN(dateObj.getTime())) {
-            const day = String(dateObj.getDate()).padStart(2, '0');
-            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-            const year = dateObj.getFullYear();
-            formattedDate = `${day}-${month}-${year}`;
-        }
-    } catch (e) {
-        console.log("Using raw date string as fallback");
-    }
-
-    // 2. Create the formatted message (No link included)
-    const playerList = s.players.map((p, i) => `${i + 1}. ${p.player_name}`).join('\n');
-    const waitlist = s.waitlist.length > 0 
-        ? `\n\n*Waitlist:* \n${s.waitlist.map((p, i) => `W${i + 1}. ${p.player_name}`).join('\n')}` 
-        : '';
-
-    const message = `🏸 *BADMINTON SESSION*\n\n📅 *Date:* ${formattedDate}\n⏰ *Time:* ${s.time}\n📍 *Loc:* ${s.location}\n💰 *Fee:* ${s.fee}\n\n*Confirmed Players:* \n${playerList || '_No players yet_'}${waitlist}`;
-
-    try {
-        // 3. Execution (Same robust logic as before)
-        if (navigator.clipboard && window.isSecureContext) {
-            await navigator.clipboard.writeText(message);
-        } else {
-            const textArea = document.createElement("textarea");
-            textArea.value = message;
-            textArea.style.position = "fixed";
-            textArea.style.left = "-9999px";
-            document.body.appendChild(textArea);
-            textArea.focus();
-            textArea.select();
-            document.execCommand('copy');
-            document.body.removeChild(textArea);
-        }
-
-        Swal.fire({
-            toast: true,
-            position: 'top',
-            icon: 'success',
-            title: 'List copied for WhatsApp!',
-            showConfirmButton: false,
-            timer: 2000
-        });
-    } catch (err) {
-        Swal.fire('Error', 'Unable to copy.', 'error');
-    }
+        const d = new Date(s.date);
+        formattedDate = `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`;
+    } catch(e) {}
+    const pList = s.players.map((p, i) => `${i + 1}. ${p.player_name}`).join('\n');
+    const msg = `🏸 *BADMINTON*\n📅 *Date:* ${formattedDate}\n⏰ *Time:* ${s.time}\n📍 *Loc:* ${s.location}\n💰 *Fee:* ${s.fee}\n\n*Confirmed:* \n${pList || '_None_'}`;
+    await navigator.clipboard.writeText(msg);
+    Swal.fire({ toast: true, position: 'top', icon: 'success', title: 'Copied!', showConfirmButton: false, timer: 1500 });
 }
-        
 
-        window.onload = loadData;
+window.onload = loadData;
     </script>
 </body>
 </html>

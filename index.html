@@ -215,12 +215,7 @@ async function deleteSession(id) {
 }
 
 
-        function showHome() {
-            document.getElementById('view-home').classList.remove('hidden');
-            document.getElementById('view-detail').classList.add('hidden');
-            document.getElementById('back-btn').classList.add('hidden');
-            currentSessionId = null;
-        }
+
 
         function showDetail(id) {
             currentSessionId = id;

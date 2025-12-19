@@ -191,15 +191,15 @@ function renderDetailPage() {
                 <span class="text-sm font-medium">${s.location}</span>
             </div>
 
-            <div class="bg-gray-50 rounded-2xl p-4 flex justify-between items-center mb-6">
-                <div class="flex items-center gap-2">
-                    <span class="text-lg">💰</span>
-                    <span class="text-gray-700 font-bold">Fee: ${s.fee}</span>
-                </div>
-                <button class="flex items-center gap-1 text-green-600 font-bold text-xs">
-                    <span class="bg-green-50 p-1 rounded">💬</span> COPY
-                </button>
-            </div>
+<div class="bg-gray-50 rounded-2xl p-4 flex justify-between items-center mb-6">
+    <div class="flex items-center gap-2">
+        <span class="text-lg">💰</span>
+        <span class="text-gray-700 font-bold text-sm">Fee: ${s.fee}</span>
+    </div>
+    <button onclick="copyToWhatsApp()" class="flex items-center gap-1 text-green-600 font-bold text-xs bg-green-50 px-3 py-2 rounded-xl active:scale-95 transition-all">
+        <span>💬</span> COPY LIST
+    </button>
+</div>
 
             <div class="flex gap-3 mb-8">
                 <input type="text" id="join-name" placeholder="Your Name" 
@@ -304,6 +304,48 @@ function renderDetailPage() {
             isAdmin = false; localStorage.removeItem('isAdmin');
             location.reload();
         }
+
+async function copyToWhatsApp() {
+    const s = allData.find(x => x.id === currentSessionId);
+    if (!s) return;
+
+    // 1. Create the formatted message
+    const playerList = s.players.map((p, i) => `${i + 1}. ${p.player_name}`).join('\n');
+    const message = `🏸 *BADMINTON SESSION*\n\n📅 *Date:* ${s.date}\n⏰ *Time:* ${s.time}\n📍 *Loc:* ${s.location}\n💰 *Fee:* ${s.fee}\n\n*Confirmed Players:* \n${playerList || '_No players yet_'}\n\n*Join here:* [Your Website Link]`;
+
+    try {
+        // 2. Try the modern Clipboard API
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(message);
+        } else {
+            // 3. Fallback for non-HTTPS or older mobile browsers
+            const textArea = document.createElement("textarea");
+            textArea.value = message;
+            textArea.style.position = "fixed"; // prevent scrolling to bottom
+            textArea.style.left = "-9999px";
+            textArea.style.top = "0";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+        }
+
+        // 4. Success Feedback
+        Swal.fire({
+            toast: true,
+            position: 'top',
+            icon: 'success',
+            title: 'Message copied for WhatsApp!',
+            showConfirmButton: false,
+            timer: 2000
+        });
+    } catch (err) {
+        console.error('Copy failed', err);
+        Swal.fire('Error', 'Unable to copy message automatically.', 'error');
+    }
+}
+        
 
         window.onload = loadData;
     </script>

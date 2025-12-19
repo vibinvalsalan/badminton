@@ -21,79 +21,81 @@
 
     <nav class="bg-blue-600 text-white p-4 shadow-lg sticky top-0 z-50 flex justify-between items-center">
         <div class="flex items-center gap-3">
-            <button id="back-btn" onclick="showHome()" class="hidden p-1 hover:bg-blue-700 rounded-full transition-colors">
+            <button id="back-btn" onclick="handleBack()" class="hidden p-1 hover:bg-blue-700 rounded-full transition-colors">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
             </button>
-            <h1 class="font-black tracking-tight text-lg">🏸 BADMINTON</h1>
+            <h1 id="nav-title" class="font-black tracking-tight text-lg uppercase">🏸 Badminton</h1>
         </div>
-        <button onclick="toggleAdminPanel()" class="text-[10px] font-black bg-blue-800 px-3 py-1.5 rounded-lg uppercase tracking-widest shadow-inner">Admin</button>
+        <button id="admin-nav-btn" onclick="goToAdmin()" class="text-[10px] font-black bg-blue-800 px-3 py-1.5 rounded-lg uppercase tracking-widest">Admin</button>
     </nav>
 
     <div class="container mx-auto p-4 max-w-lg">
-        <div id="view-home" class="animate-fadeIn">
+        
+        <div id="view-home" class="view-section animate-fadeIn">
             <h2 class="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Available Sessions</h2>
             <div id="session-list" class="space-y-3"></div>
         </div>
 
-        <div id="view-detail" class="hidden animate-fadeIn">
+        <div id="view-detail" class="view-section hidden animate-fadeIn">
             <div id="session-detail-content"></div>
         </div>
 
-        <div id="loading" class="text-center py-20">
-            <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto"></div>
-            <p class="text-gray-400 text-xs mt-4 font-bold uppercase tracking-widest">Fetching Data...</p>
-        </div>
-    </div>
+        <div id="view-admin" class="view-section hidden animate-fadeIn">
+            <div id="admin-auth" class="bg-white p-8 rounded-3xl shadow-xl mt-10">
+                <h2 class="text-2xl font-black mb-6">Admin Login</h2>
+                <input type="password" id="admin-pass" placeholder="Password" class="w-full bg-gray-100 p-4 rounded-2xl mb-4 outline-none focus:ring-2 focus:ring-blue-500">
+                <button onclick="verifyAdmin()" class="w-full bg-gray-900 text-white p-4 rounded-2xl font-bold">Access Dashboard</button>
+            </div>
 
-<div id="admin-modal" class="fixed inset-0 bg-black bg-opacity-60 hidden flex items-center justify-center z-[60] p-4 backdrop-filter backdrop-blur-sm">
-    <div class="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
-        <div class="flex justify-between items-center mb-6">
-            <h2 id="admin-title" class="text-xl font-black text-gray-800">Admin Console</h2>
-            <button onclick="toggleAdminPanel()" class="text-gray-400 hover:text-red-500">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-            </button>
-        </div>
-
-        <div id="admin-login" class="space-y-4">
-            <input type="password" id="admin-pass" placeholder="Enter Password" class="w-full bg-gray-100 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500">
-            <button onclick="verifyAdmin()" class="w-full bg-gray-900 text-white p-4 rounded-2xl font-bold">Login</button>
-        </div>
-
-        <div id="admin-dashboard" class="hidden space-y-4">
-            <button onclick="showCreateForm()" class="w-full bg-blue-600 text-white p-4 rounded-2xl font-bold shadow-lg mb-4">+ Create New Session</button>
-            <h3 class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Manage Existing</h3>
-            <div id="admin-session-list" class="space-y-2"></div>
-            <button onclick="logoutAdmin()" class="w-full text-gray-400 text-[10px] font-black uppercase mt-8 tracking-widest">Logout</button>
-        </div>
-
-        <div id="admin-form" class="hidden space-y-4">
-            <input type="hidden" id="edit-session-id">
-            <div class="space-y-3">
-                <label class="text-[10px] font-black text-gray-400 uppercase">Session Date</label>
-                <input type="date" id="new-date" class="w-full bg-gray-50 p-3 rounded-xl border border-gray-100">
+            <div id="admin-dashboard" class="hidden space-y-6">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-2xl font-black">Dashboard</h2>
+                    <button onclick="logoutAdmin()" class="text-red-500 text-[10px] font-black uppercase tracking-widest">Logout</button>
+                </div>
                 
-                <label class="text-[10px] font-black text-gray-400 uppercase">Time & Location</label>
-                <input type="text" id="new-time" placeholder="Time (e.g., 7PM - 9PM)" class="w-full bg-gray-50 p-3 rounded-xl border border-gray-100">
-                <input type="text" id="new-loc" placeholder="Location" class="w-full bg-gray-50 p-3 rounded-xl border border-gray-100">
+                <button onclick="showSessionForm()" class="w-full bg-blue-600 text-white p-4 rounded-2xl font-bold shadow-lg text-center">+ New Session</button>
                 
-                <div class="flex gap-2">
-                    <div class="w-1/2">
-                        <label class="text-[10px] font-black text-gray-400 uppercase">Capacity</label>
-                        <input type="number" id="new-cap" placeholder="Max Players" class="w-full bg-gray-50 p-3 rounded-xl border border-gray-100">
-                    </div>
-                    <div class="w-1/2">
-                        <label class="text-[10px] font-black text-gray-400 uppercase">Fee</label>
-                        <input type="text" id="new-fee" placeholder="Price" class="w-full bg-gray-50 p-3 rounded-xl border border-gray-100">
-                    </div>
+                <div class="space-y-3">
+                    <h3 class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Manage Active Sessions</h3>
+                    <div id="admin-session-list-full" class="space-y-3"></div>
                 </div>
             </div>
-            <div class="flex gap-2 pt-4">
-                <button onclick="showDashboard()" class="w-1/3 bg-gray-100 text-gray-600 p-4 rounded-2xl font-bold">Cancel</button>
-                <button id="save-session-btn" onclick="saveSession()" class="w-2/3 bg-blue-600 text-white p-4 rounded-2xl font-bold shadow-lg">Save Session</button>
+
+            <div id="admin-editor" class="hidden bg-white p-6 rounded-3xl shadow-xl space-y-4">
+                <h2 id="editor-title" class="text-xl font-black">Session Editor</h2>
+                <input type="hidden" id="edit-id">
+                <div class="grid grid-cols-1 gap-4">
+                    <div>
+                        <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Date</label>
+                        <input type="date" id="f-date" class="w-full bg-gray-50 p-3 rounded-xl border border-gray-100">
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Time</label>
+                        <input type="text" id="f-time" placeholder="7pm - 9pm" class="w-full bg-gray-50 p-3 rounded-xl border border-gray-100">
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Location</label>
+                        <input type="text" id="f-loc" class="w-full bg-gray-50 p-3 rounded-xl border border-gray-100">
+                    </div>
+                    <div class="flex gap-4">
+                        <div class="w-1/2">
+                            <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Capacity</label>
+                            <input type="number" id="f-cap" class="w-full bg-gray-50 p-3 rounded-xl border border-gray-100">
+                        </div>
+                        <div class="w-1/2">
+                            <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Fee</label>
+                            <input type="text" id="f-fee" class="w-full bg-gray-50 p-3 rounded-xl border border-gray-100">
+                        </div>
+                    </div>
+                </div>
+                <div class="flex gap-2 pt-4">
+                    <button onclick="closeEditor()" class="w-1/3 bg-gray-100 font-bold p-4 rounded-2xl">Cancel</button>
+                    <button onclick="saveSession()" class="w-2/3 bg-blue-600 text-white font-bold p-4 rounded-2xl shadow-lg">Save</button>
+                </div>
             </div>
         </div>
+
     </div>
-</div>
 
     <script>
         // --- CONFIGURATION ---
@@ -106,6 +108,113 @@
         let isAdmin = localStorage.getItem('isAdmin') === 'true';
 
         // --- NAVIGATION ---
+
+
+// --- PAGE NAVIGATION ---
+function hideAllViews() {
+    document.querySelectorAll('.view-section').forEach(v => v.classList.add('hidden'));
+    document.getElementById('back-btn').classList.add('hidden');
+    document.getElementById('admin-nav-btn').classList.remove('hidden');
+}
+
+function handleBack() {
+    // If in Admin Editor, go back to Admin Dashboard
+    if (!document.getElementById('admin-editor').classList.contains('hidden')) {
+        closeEditor();
+    } else {
+        showHome();
+    }
+}
+
+function showHome() {
+    hideAllViews();
+    document.getElementById('view-home').classList.remove('hidden');
+    document.getElementById('nav-title').innerText = "🏸 Badminton";
+    currentSessionId = null;
+}
+
+function goToAdmin() {
+    hideAllViews();
+    document.getElementById('view-admin').classList.remove('hidden');
+    document.getElementById('back-btn').classList.remove('hidden');
+    document.getElementById('admin-nav-btn').classList.add('hidden');
+    document.getElementById('nav-title').innerText = "Admin Page";
+    
+    if (isAdmin) {
+        document.getElementById('admin-auth').classList.add('hidden');
+        document.getElementById('admin-dashboard').classList.remove('hidden');
+        renderAdminDashboard();
+    }
+}
+
+// --- ADMIN DASHBOARD LOGIC ---
+function renderAdminDashboard() {
+    const list = document.getElementById('admin-session-list-full');
+    list.innerHTML = '';
+    
+    allData.forEach(s => {
+        const item = document.createElement('div');
+        item.className = "bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center";
+        item.innerHTML = `
+            <div>
+                <p class="text-xs font-bold text-blue-600">${s.date}</p>
+                <h4 class="font-black text-gray-800">${s.time}</h4>
+                <p class="text-[10px] text-gray-400 font-bold uppercase">${s.location}</p>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="showSessionForm('${s.id}')" class="p-2 bg-gray-50 rounded-xl text-blue-600 font-bold text-xs uppercase px-4">Edit</button>
+                <button onclick="deleteSession('${s.id}')" class="p-2 text-red-300 hover:text-red-500">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                </button>
+            </div>
+        `;
+        list.appendChild(item);
+    });
+}
+
+function showSessionForm(id = null) {
+    document.getElementById('admin-dashboard').classList.add('hidden');
+    document.getElementById('admin-editor').classList.remove('hidden');
+    
+    if (id) {
+        const s = allData.find(x => x.id === id);
+        document.getElementById('editor-title').innerText = "Edit Session";
+        document.getElementById('edit-id').value = s.id;
+        document.getElementById('f-date').value = s.date;
+        document.getElementById('f-time').value = s.time;
+        document.getElementById('f-loc').value = s.location;
+        document.getElementById('f-cap').value = s.capacity;
+        document.getElementById('f-fee').value = s.fee;
+    } else {
+        document.getElementById('editor-title').innerText = "New Session";
+        document.getElementById('edit-id').value = "";
+        ['f-date', 'f-time', 'f-loc', 'f-cap', 'f-fee'].forEach(i => document.getElementById(i).value = "");
+    }
+}
+
+function closeEditor() {
+    document.getElementById('admin-editor').classList.add('hidden');
+    document.getElementById('admin-dashboard').classList.remove('hidden');
+}
+
+async function deleteSession(id) {
+    const { isConfirmed } = await Swal.fire({
+        title: 'Delete Session?',
+        text: "This will remove all players and logs for this session.",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        confirmButtonText: 'Yes, Delete'
+    });
+
+    if (isConfirmed) {
+        await _supabase.from('sessions').delete().eq('id', id);
+        loadData();
+        goToAdmin();
+    }
+}
+
+
         function showHome() {
             document.getElementById('view-home').classList.remove('hidden');
             document.getElementById('view-detail').classList.add('hidden');

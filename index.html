@@ -48,9 +48,7 @@
                     <h2 class="text-2xl font-black">Dashboard</h2>
                     <button onclick="logoutAdmin()" class="text-red-500 text-[10px] font-black uppercase tracking-widest">Logout</button>
                 </div>
-                
                 <button onclick="showSessionForm()" class="w-full bg-blue-600 text-white p-4 rounded-2xl font-bold shadow-lg text-center">+ New Session</button>
-                
                 <div class="space-y-3">
                     <h3 class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Manage Active Sessions</h3>
                     <div id="admin-session-list-full" class="space-y-3"></div>
@@ -101,6 +99,19 @@
         let currentSessionId = null;
         let isAdmin = localStorage.getItem('isAdmin') === 'true';
 
+        // Utility to format date to dd-mm-yyyy (weekday)
+        function formatDateWithDay(dateStr) {
+            try {
+                const dateObj = new Date(dateStr);
+                if (isNaN(dateObj.getTime())) return dateStr;
+                const day = String(dateObj.getDate()).padStart(2, '0');
+                const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+                const year = dateObj.getFullYear();
+                const weekday = new Intl.DateTimeFormat('en-GB', { weekday: 'long' }).format(dateObj);
+                return `${day}-${month}-${year} (${weekday})`;
+            } catch (e) { return dateStr; }
+        }
+
         function hideAllViews() {
             document.querySelectorAll('.view-section').forEach(v => v.classList.add('hidden'));
             document.getElementById('back-btn').classList.add('hidden');
@@ -131,7 +142,6 @@
             document.getElementById('back-btn').classList.remove('hidden');
             document.getElementById('admin-nav-btn').classList.add('hidden');
             document.getElementById('nav-title').innerText = "Admin Page";
-            
             if (isAdmin) {
                 document.getElementById('admin-auth').classList.add('hidden');
                 document.getElementById('admin-dashboard').classList.remove('hidden');
@@ -145,24 +155,23 @@
         function renderAdminDashboard() {
             const list = document.getElementById('admin-session-list-full');
             list.innerHTML = '';
-            
             allData.forEach(s => {
+                const displayDate = formatDateWithDay(s.date);
                 const item = document.createElement('div');
                 item.className = "bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center";
                 item.innerHTML = `
                     <div>
-                        <p class="text-xs font-bold text-blue-600">${s.date}</p>
+                        <p class="text-xs font-bold text-blue-600">${displayDate}</p>
                         <h4 class="font-black text-gray-800">${s.time}</h4>
                         <p class="text-[10px] text-gray-400 font-bold uppercase tracking-tight">${s.location} • ${s.players.length}/${s.capacity}</p>
                     </div>
                     <div class="flex gap-2">
                         <button onclick="showDetail('${s.id}')" class="p-2 bg-blue-50 rounded-xl text-blue-700 font-bold text-[10px] uppercase px-3">View</button>
                         <button onclick="showSessionForm('${s.id}')" class="p-2 bg-gray-50 rounded-xl text-gray-600 font-bold text-[10px] uppercase px-3">Edit</button>
-                        <button onclick="deleteSession('${s.id}')" class="p-2 text-red-300 hover:text-red-500">
+                        <button onclick="deleteSession('${s.id}')" class="p-2 text-red-300">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                         </button>
-                    </div>
-                `;
+                    </div>`;
                 list.appendChild(item);
             });
         }
@@ -250,10 +259,11 @@
             list.innerHTML = '';
             allData.forEach(s => {
                 const spotsLeft = Math.max(0, s.capacity - s.players.length);
+                const displayDate = formatDateWithDay(s.date);
                 const card = document.createElement('div');
                 card.className = "bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center cursor-pointer";
                 card.onclick = () => showDetail(s.id);
-                card.innerHTML = `<div><p class="text-[10px] font-black text-blue-600 uppercase">${s.date}</p><h3 class="text-xl font-black">${s.time}</h3><p class="text-sm text-gray-400">${s.location}</p></div><div class="flex flex-col items-end"><span class="text-[10px] font-bold px-3 py-1 rounded-full ${spotsLeft > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">${spotsLeft > 0 ? spotsLeft + ' Left' : 'Full'}</span></div>`;
+                card.innerHTML = `<div><p class="text-[10px] font-black text-blue-600 uppercase">${displayDate}</p><h3 class="text-xl font-black">${s.time}</h3><p class="text-sm text-gray-400">${s.location}</p></div><div class="flex flex-col items-end"><span class="text-[10px] font-bold px-3 py-1 rounded-full ${spotsLeft > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">${spotsLeft > 0 ? spotsLeft + ' Left' : 'Full'}</span></div>`;
                 list.appendChild(card);
             });
         }
@@ -270,11 +280,11 @@
             const s = allData.find(x => x.id === currentSessionId);
             if (!s) return showHome();
             const isFull = s.players.length >= s.capacity;
-            
+            const displayDate = formatDateWithDay(s.date);
             document.getElementById('session-detail-content').innerHTML = `
                 <div class="bg-white rounded-3xl shadow-xl p-6 card-border-top animate-fadeIn">
                     <div class="flex justify-between items-start mb-2">
-                        <div><p class="text-blue-600 font-black text-sm">${s.date}</p><h2 class="text-3xl font-black">${s.time}</h2></div>
+                        <div><p class="text-blue-600 font-black text-sm">${displayDate}</p><h2 class="text-3xl font-black">${s.time}</h2></div>
                         ${isFull ? `<span class="bg-red-50 text-red-500 text-[10px] font-black px-3 py-1 rounded-lg">SESSION FULL</span>` : ''}
                     </div>
                     <p class="text-sm text-gray-400 mb-6">${s.location}</p>
@@ -298,21 +308,18 @@
                                     <button onclick="handleRemoval('${p.id}', '${s.id}', '${p.player_name}')" class="text-red-300">×</button>
                                 </div>
                             </div>
-                        `).join('') || '<p class="text-gray-400 italic">No players</p>'}
+                        `).join('') || '<p class="text-gray-400 italic text-center">No players yet</p>'}
                     </div>
                     ${s.waitlist.length > 0 ? `
                         <h4 class="text-[10px] font-black text-gray-400 uppercase mt-6 mb-3">Waitlist</h4>
                         <div class="space-y-2">
                             ${s.waitlist.map(p => `
                                 <div class="flex justify-between items-center p-3 bg-gray-50 rounded-xl border border-gray-100">
-                                    <span class="text-gray-500 italic">${p.player_name}</span>
-                                    <button onclick="handleRemoval('${p.id}', '${s.id}', '${p.player_name}')" class="text-red-300">×</button>
-                                </div>
-                            `).join('')}
-                        </div>
-                    ` : ''}
-                </div>
-            `;
+                                    <span class="text-gray-500 italic font-medium">${p.player_name}</span>
+                                    <button onclick="handleRemoval('${p.id}', '${s.id}', '${p.player_name}')" class="text-red-300 font-bold">×</button>
+                                </div>`).join('')}
+                        </div>` : ''}
+                </div>`;
         }
 
         async function joinSession() {

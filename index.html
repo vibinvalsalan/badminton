@@ -583,19 +583,23 @@ function renderDetailPage() {
         joinSession();
     }
 
-// Native Mobile Share Sheet
-function openNativeShare() {
-    const s = allData.find(x => x.id === currentSessionId);
-    if (navigator.share) {
-        navigator.share({
-            title: 'Badminton Session',
-            text: `Join us on ${formatDateWithDay(s.date)} at ${s.time}!`,
-            url: window.location.href
-        }).catch(console.error);
-    } else {
-        copyToWhatsApp(); // Fallback
+    // Native Mobile Share Sheet
+    function openNativeShare() {
+        const s = allData.find(x => x.id === currentSessionId);
+        const directLink = `${window.location.origin}${window.location.pathname}?session=${s.id}`;
+
+        if (navigator.share) {
+            navigator.share({
+                title: 'Join my Badminton Session!',
+                text: `Click here to join the session on ${formatDateWithDay(s.date)}:`,
+                url: directLink
+            }).catch(console.error);
+        } else {
+            // Fallback: Copy the direct link to clipboard
+            navigator.clipboard.writeText(directLink);
+            Swal.fire({ toast: true, position: 'top', icon: 'success', title: 'Link copied!', showConfirmButton: false, timer: 1500 });
+        }
     }
-}
 
     async function handlePayment(id, current) {
         const newStatus = current === 'Paid' ? 'Unpaid' : 'Paid';
@@ -642,7 +646,20 @@ function openNativeShare() {
         if (isConfirmed) { await _supabase.from('sessions').delete().eq('id', id); loadData(); }
     }
 
-    window.onload = loadData;
+    window.onload = async () => {
+        await loadData(); // Load all data first
+        
+        // Check if there is a session ID in the URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const sessionId = urlParams.get('session');
+        
+        if (sessionId) {
+            // If found, automatically trigger the detail view for that session
+            showDetail(sessionId);
+        }
+    };
+
+
 </script>
 </body>
 </html>

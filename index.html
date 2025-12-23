@@ -300,12 +300,12 @@
                     <div class="flex items-center gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-tight">
                         <span class="flex items-center gap-1">
                             <span class="text-gray-300">FEE:</span> 
-                            <span class="${s.fee.toLowerCase() === 'tbc' ? 'text-yellow-600' : 'text-blue-600'}">${s.fee}</span>
+                            <span class="text-blue-600">${s.fee}</span>
                         </span>
                         <span class="text-gray-200">•</span>
-                        <span>PLAYERS: <span class="text-gray-600">${s.players.length}/${s.capacity}</span></span>
+                        <span>PLAYERS: <span class="text-blue-600">${s.players.length}/${s.capacity}</span></span>
                         <span class="text-gray-200">•</span>
-                        <span>PAID: <span class="text-gray-600">${paidCount}/${s.players.length}</span></span>
+                        <span>PAID: <span class="text-blue-600">${paidCount}/${s.players.length}</span></span>
                     </div>
 
                     ${waitlistCount > 0 ? `

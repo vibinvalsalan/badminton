@@ -260,6 +260,7 @@
         if (isAdmin) renderAdminLists();
     }
 
+
     function renderSessions() {
         const list = document.getElementById('session-list');
         list.innerHTML = '';
@@ -267,24 +268,35 @@
         
         allData.filter(s => new Date(s.date).setHours(0,0,0,0) >= today).forEach(s => {
             const spotsLeft = Math.max(0, s.capacity - s.players.length);
-            const paidCount = s.players.filter(p => p.payment_status === 'Paid').length;
             
             const card = document.createElement('div');
-            card.className = "bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center cursor-pointer hover:border-blue-200 transition-colors";
+            // Added 16px internal padding and subtle shadow for depth
+            card.className = "bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4 cursor-pointer active:scale-[0.98] transition-all mb-3";
             card.onclick = () => showDetail(s.id);
+            
             card.innerHTML = `
-                <div>
-                    <p class="text-[10px] font-black text-blue-600 uppercase">${formatDateWithDay(s.date)}</p>
-                    <h3 class="text-xl font-black">${s.time}</h3>
-                    <p class="text-[10px] text-gray-400 font-bold uppercase">${s.location} • Fee: ${s.fee}</p>
+                <div class="flex-shrink-0 w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-2xl">
+                    🏸
                 </div>
-                <div class="flex flex-col items-end">
-                    <span class="text-[10px] font-bold px-3 py-1 rounded-full ${spotsLeft > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">${spotsLeft > 0 ? spotsLeft + ' Left' : 'Full'}</span>
-                    <span class="text-[10px] font-black text-gray-400 mt-1 uppercase">Paid: ${paidCount}/${s.players.length}</span>
+                
+                <div class="flex-1">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h3 class="text-lg font-bold text-gray-900">${s.time}</h3>
+                            <p class="text-[11px] font-bold text-gray-400 uppercase">${formatDateWithDay(s.date)}</p>
+                        </div>
+                        <span class="text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-tighter ${spotsLeft > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}">
+                            ${spotsLeft > 0 ? spotsLeft + ' Left' : 'Full'}
+                        </span>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-1 flex items-center gap-1">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path></svg>
+                        ${s.location}
+                    </p>
                 </div>`;
             list.appendChild(card);
         });
-    }
+    }    
 
     function renderAdminLists() {
         const activeContainer = document.getElementById('list-active');

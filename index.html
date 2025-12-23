@@ -269,11 +269,11 @@
         allData.filter(s => new Date(s.date).setHours(0,0,0,0) >= today).forEach(s => {
             const spotsLeft = Math.max(0, s.capacity - s.players.length);
             const waitlistCount = s.waitlist ? s.waitlist.length : 0;
-            const isFeeTBC = !s.fee || s.fee.toLowerCase() === 'tbc';
+            const paidCount = s.players.filter(p => p.payment_status === 'Paid').length;
             
             const card = document.createElement('div');
-            // Removed unnecessary padding and used a tight flex-col
-            card.className = "bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex gap-4 cursor-pointer hover:shadow-md transition-all active:scale-[0.98] mb-3";
+            // Tightened padding and layout for a cleaner look
+            card.className = "bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex items-center gap-4 cursor-pointer hover:shadow-md transition-all active:scale-[0.98] mb-3";
             card.onclick = () => showDetail(s.id);
             
             card.innerHTML = `
@@ -281,43 +281,43 @@
                     🏸
                 </div>
                 
-                <div class="flex-1">
-                    <div class="flex justify-between items-start">
+                <div class="flex-1 min-w-0">
+                    <div class="flex justify-between items-start mb-1">
                         <div>
                             <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest">${formatDateWithDay(s.date)}</p>
                             <h3 class="text-lg font-black text-gray-900 leading-tight">${s.time}</h3>
                         </div>
-                        
-                        <div class="flex flex-col items-end gap-1.5">
-                            <span class="text-[9px] font-black px-2.5 py-1 rounded-full uppercase ${spotsLeft > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}">
-                                ${spotsLeft > 0 ? spotsLeft + ' Left' : 'Full'}
-                            </span>
-                            ${waitlistCount > 0 ? `
-                                <span class="text-[9px] font-black px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 uppercase animate-pulse">
-                                    ${waitlistCount} Waiting
-                                </span>
-                            ` : ''}
-                        </div>
+                        <span class="text-[9px] font-black px-2 py-1 rounded-full uppercase ${spotsLeft > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}">
+                            ${spotsLeft > 0 ? spotsLeft + ' Left' : 'Full'}
+                        </span>
                     </div>
 
-                    <div class="mt-2 flex items-center justify-between">
-                        <div class="flex items-center gap-1.5 overflow-hidden">
-                            <svg class="w-3 h-3 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path></svg>
-                            <p class="text-xs text-gray-400 truncate">${s.location}</p>
-                        </div>
-                        
-                        <div class="flex-shrink-0">
-                            ${isFeeTBC 
-                                ? `<span class="bg-yellow-50 text-yellow-600 text-[9px] font-bold px-2 py-0.5 rounded uppercase">Fee: TBC</span>`
-                                : `<span class="text-gray-900 text-xs font-black uppercase">£${s.fee}</span>`
-                            }
-                        </div>
+                    <div class="flex items-center gap-1.5 mb-1">
+                        <svg class="w-3 h-3 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path></svg>
+                        <p class="text-xs text-gray-400 truncate">${s.location}</p>
                     </div>
+
+                    <div class="flex items-center gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-tight">
+                        <span class="flex items-center gap-1">
+                            <span class="text-gray-300">FEE:</span> 
+                            <span class="${s.fee.toLowerCase() === 'tbc' ? 'text-yellow-600' : 'text-blue-600'}">${s.fee}</span>
+                        </span>
+                        <span class="text-gray-200">•</span>
+                        <span>PLAYERS: <span class="text-gray-600">${s.players.length}/${s.capacity}</span></span>
+                        <span class="text-gray-200">•</span>
+                        <span>PAID: <span class="text-gray-600">${paidCount}/${s.players.length}</span></span>
+                    </div>
+
+                    ${waitlistCount > 0 ? `
+                        <div class="mt-2 flex items-center gap-1">
+                            <div class="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse"></div>
+                            <p class="text-[9px] font-black text-orange-500 uppercase">${waitlistCount} on waiting list</p>
+                        </div>
+                    ` : ''}
                 </div>`;
             list.appendChild(card);
         });
-    }
-    
+    } 
 
     function renderAdminLists() {
         const activeContainer = document.getElementById('list-active');

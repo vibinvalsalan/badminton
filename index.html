@@ -326,30 +326,70 @@
     function renderDetailPage() {
         const s = allData.find(x => x.id === currentSessionId);
         if (!s) return showHome();
+
         const pOptions = masterPlayers.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+        
+        // Calculate counts for the UI
+        const totalConfirmed = s.players.length;
+        const totalPaid = s.players.filter(p => p.payment_status === 'Paid').length;
+
         document.getElementById('session-detail-content').innerHTML = `
             <div class="bg-white rounded-3xl shadow-xl p-6 card-border-top animate-fadeIn">
-                <div class="flex justify-between items-start mb-6">
-                    <div>
-                        <p class="text-xs font-black text-blue-600 uppercase">${formatDateWithDay(s.date)}</p>
-                        <h2 class="text-3xl font-black">${s.time}</h2>
-                        <p class="text-sm text-gray-400">${s.location} • Fee: ${s.fee}</p>
+                <div class="mb-6 space-y-1">
+                    <div class="flex justify-between items-center">
+                        <p class="text-[10px] font-black text-blue-600 uppercase tracking-widest">Date</p>
+                        <button onclick="copyToWhatsApp()" class="bg-green-50 text-green-600 px-2 py-1 rounded-lg font-bold text-[10px] uppercase">Copy Share</button>
                     </div>
-                    <button onclick="copyToWhatsApp()" class="bg-green-50 text-green-600 p-2 rounded-xl font-bold text-[10px] uppercase">Copy Share</button>
+                    <p class="text-lg font-bold text-gray-800 border-b border-gray-50 pb-1">${formatDateWithDay(s.date)}</p>
+                    
+                    <p class="text-[10px] font-black text-gray-400 uppercase pt-2">Time</p>
+                    <p class="text-lg font-bold text-gray-800 border-b border-gray-50 pb-1">${s.time}</p>
+                    
+                    <p class="text-[10px] font-black text-gray-400 uppercase pt-2">Location</p>
+                    <p class="text-lg font-bold text-gray-800 border-b border-gray-50 pb-1">${s.location}</p>
+                    
+                    <p class="text-[10px] font-black text-gray-400 uppercase pt-2">Fee</p>
+                    <p class="text-lg font-bold text-gray-800 border-b border-gray-50 pb-1">${s.fee}</p>
+                    
+                    <p class="text-[10px] font-black text-gray-400 uppercase pt-2">Players</p>
+                    <p class="text-lg font-bold text-gray-800 border-b border-gray-50 pb-1">${totalConfirmed} / ${s.capacity}</p>
+                    
+                    <p class="text-[10px] font-black text-gray-400 uppercase pt-2">Paid</p>
+                    <p class="text-lg font-bold text-gray-800 border-b border-gray-50 pb-1">${totalPaid} / ${totalConfirmed}</p>
                 </div>
-                <div class="flex gap-3 mb-8">
-                    <select id="join-player-id" class="flex-1 bg-gray-100 rounded-2xl px-5 py-4 outline-none text-sm appearance-none"><option value="">Select Your Name...</option>${pOptions}</select>
+
+                <div class="flex gap-3 mb-8 pt-4">
+                    <select id="join-player-id" class="flex-1 bg-gray-100 rounded-2xl px-5 py-4 outline-none text-sm appearance-none">
+                        <option value="">Select Your Name...</option>
+                        ${pOptions}
+                    </select>
                     <button onclick="joinSession()" class="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black uppercase">Join</button>
                 </div>
+
                 <div class="space-y-2">
-                    ${s.players.map(p => `<div class="flex justify-between items-center p-3 bg-white border border-gray-100 rounded-xl">
-                        <span class="font-semibold text-gray-700">${p.player_name}</span>
-                        <div class="flex gap-3">
-                            <button onclick="handlePayment('${p.id}', '${p.payment_status}')" class="text-[10px] px-3 py-1 rounded-full font-bold ${p.payment_status === 'Paid' ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-400'}">${p.payment_status === 'Paid' ? 'PAID' : 'PAY'}</button>
-                            <button onclick="handleRemoval('${p.id}', '${s.id}', '${p.player_name}')" class="text-red-300">×</button>
+                    <p class="text-[10px] font-black text-gray-400 uppercase mb-2">Confirmed Players</p>
+                    ${s.players.map(p => `
+                        <div class="flex justify-between items-center p-3 bg-white border border-gray-100 rounded-xl">
+                            <span class="font-semibold text-gray-700">${p.player_name}</span>
+                            <div class="flex gap-3">
+                                <button onclick="handlePayment('${p.id}', '${p.payment_status}')" 
+                                    class="text-[10px] px-3 py-1 rounded-full font-bold ${p.payment_status === 'Paid' ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-400'}">
+                                    ${p.payment_status === 'Paid' ? 'PAID' : 'PAY'}
+                                </button>
+                                <button onclick="handleRemoval('${p.id}', '${s.id}', '${p.player_name}')" class="text-red-300 hover:text-red-500 transition-colors">×</button>
+                            </div>
                         </div>
-                    </div>`).join('')}
-                    ${s.waitlist.length > 0 ? `<p class="text-[10px] font-black text-gray-400 uppercase pt-4">Waitlist</p>` + s.waitlist.map(p => `<div class="p-3 bg-gray-50 rounded-xl text-gray-400 text-sm italic">${p.player_name}</div>`).join('') : ''}
+                    `).join('')}
+                    
+                    ${s.waitlist.length > 0 ? `
+                        <p class="text-[10px] font-black text-gray-400 uppercase pt-6 mb-2">Waiting List</p>
+                        ${s.waitlist.map(p => `
+                            <div class="flex justify-between items-center p-3 bg-gray-50 rounded-xl italic">
+                                <span class="text-gray-500 text-sm">${p.player_name}</span>
+                                <button onclick="handleRemoval('${p.id}', '${s.id}', '${p.player_name}')" class="text-red-200 hover:text-red-400 transition-colors">×</button>
+                            </div>
+                        `).join('')}
+                    ` : ''}
                 </div>
             </div>`;
     }

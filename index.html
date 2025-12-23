@@ -48,10 +48,22 @@
                     <h2 class="text-2xl font-black">Dashboard</h2>
                     <button onclick="logoutAdmin()" class="text-red-500 text-[10px] font-black uppercase tracking-widest">Logout</button>
                 </div>
+                
                 <button onclick="showSessionForm()" class="w-full bg-blue-600 text-white p-4 rounded-2xl font-bold shadow-lg text-center">+ New Session</button>
+                
                 <div class="space-y-3">
                     <h3 class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Manage Active Sessions</h3>
                     <div id="admin-session-list-full" class="space-y-3"></div>
+                </div>
+
+                <div class="mt-10 space-y-3 bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+                    <h3 class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Master Player List</h3>
+                    <div class="flex gap-2">
+                        <input type="text" id="new-player-name" placeholder="Full Name" class="flex-1 bg-gray-50 p-3 rounded-xl border border-gray-100 text-sm">
+                        <button onclick="addMasterPlayer()" class="bg-blue-600 text-white px-5 rounded-xl font-bold text-sm">Add</button>
+                    </div>
+                    <div id="master-player-list" class="space-y-2 mt-4 max-h-60 overflow-y-auto pr-1">
+                        </div>
                 </div>
             </div>
 
@@ -91,16 +103,16 @@
     </div>
 
     <script>
-// Placeholders for GitHub Actions
-const SB_URL = 'VITE_SUPABASE_URL'; 
-const SB_KEY = 'VITE_SUPABASE_KEY';
-const _supabase = supabase.createClient(SB_URL, SB_KEY);
+    // Placeholders for GitHub Actions
+    const SB_URL = 'VITE_SUPABASE_URL'; 
+    const SB_KEY = 'VITE_SUPABASE_KEY';
+    const _supabase = supabase.createClient(SB_URL, SB_KEY);
 
     let allData = [];
+    let masterPlayers = [];
     let currentSessionId = null;
     let isAdmin = localStorage.getItem('isAdmin') === 'true';
 
-    // --- NEW AUDIT LOGGING UTILITY ---
     async function logAction(action, details, playerName = null, sessionInfo = null) {
         try {
             await _supabase.from('audit_logs').insert([{
@@ -109,12 +121,9 @@ const _supabase = supabase.createClient(SB_URL, SB_KEY);
                 player_name: playerName,
                 session_info: sessionInfo
             }]);
-        } catch (err) {
-            console.error("Audit log failed:", err);
-        }
+        } catch (err) { console.error("Audit log failed:", err); }
     }
 
-    // Utility to format date to dd-mm-yyyy (weekday)
     function formatDateWithDay(dateStr) {
         try {
             const dateObj = new Date(dateStr);
@@ -190,6 +199,40 @@ const _supabase = supabase.createClient(SB_URL, SB_KEY);
                 </div>`;
             list.appendChild(item);
         });
+        renderMasterPlayerList();
+    }
+
+    async function addMasterPlayer() {
+        const nameInput = document.getElementById('new-player-name');
+        const name = nameInput.value.trim();
+        if (!name) return;
+        try {
+            await _supabase.from('players').insert([{ name }]);
+            nameInput.value = '';
+            await logAction('ADMIN_PLAYER_CREATED', `Added ${name} to master list`);
+            loadData();
+        } catch(e) { Swal.fire('Error', 'Player might already exist', 'error'); }
+    }
+
+    async function deleteMasterPlayer(id, name) {
+        const { isConfirmed } = await Swal.fire({ title: 'Remove Player?', text: `This will remove ${name} from the master list.`, icon: 'warning', showCancelButton: true });
+        if (isConfirmed) {
+            await _supabase.from('players').delete().eq('id', id);
+            await logAction('ADMIN_PLAYER_DELETED', `Removed ${name} from master list`);
+            loadData();
+        }
+    }
+
+    function renderMasterPlayerList() {
+        const container = document.getElementById('master-player-list');
+        container.innerHTML = masterPlayers.map(p => `
+            <div class="flex justify-between items-center p-3 bg-gray-50 rounded-xl border border-gray-100">
+                <span class="text-sm font-bold text-gray-700">${p.name}</span>
+                <button onclick="deleteMasterPlayer(${p.id}, '${p.name}')" class="text-red-400 hover:text-red-600">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                </button>
+            </div>
+        `).join('') || '<p class="text-gray-400 text-xs text-center italic">No players in list</p>';
     }
 
     function showSessionForm(id = null) {
@@ -229,13 +272,9 @@ const _supabase = supabase.createClient(SB_URL, SB_KEY);
         try {
             const action = sessionId ? 'SESSION_EDITED' : 'SESSION_CREATED';
             const info = `${sessionData.date} ${sessionData.time}`;
-            
             if (sessionId) await _supabase.from('sessions').update(sessionData).eq('id', sessionId);
             else await _supabase.from('sessions').insert([sessionData]);
-            
-            await logAction(action, `Session details: ${sessionData.location}, Fee: ${sessionData.fee}`, null, info);
-            
-            Swal.fire({ toast: true, position: 'top', icon: 'success', title: 'Saved!', showConfirmButton: false, timer: 1500 });
+            await logAction(action, `Session details: ${sessionData.location}`, null, info);
             closeEditor();
             loadData();
         } catch (err) { Swal.fire('Error', 'Could not save', 'error'); }
@@ -266,13 +305,17 @@ const _supabase = supabase.createClient(SB_URL, SB_KEY);
     }
 
     async function loadData() {
-        const { data, error } = await _supabase.from('sessions').select('*, registrations(*)');
-        if (error) return;
-        allData = data.map(s => ({
+        const { data: sData, error: sErr } = await _supabase.from('sessions').select('*, registrations(*)');
+        const { data: pData } = await _supabase.from('players').select('*').order('name');
+        if (sErr) return;
+        
+        masterPlayers = pData || [];
+        allData = sData.map(s => ({
             ...s,
             players: s.registrations.filter(r => r.status === 'Confirmed').sort((a,b) => new Date(a.created_at) - new Date(b.created_at)),
             waitlist: s.registrations.filter(r => r.status === 'Waitlist').sort((a,b) => new Date(a.created_at) - new Date(b.created_at))
         }));
+        
         renderSessions();
         if (currentSessionId) renderDetailPage();
         if (isAdmin && !document.getElementById('view-admin').classList.contains('hidden')) renderAdminDashboard();
@@ -317,6 +360,9 @@ const _supabase = supabase.createClient(SB_URL, SB_KEY);
         const displayDate = formatDateWithDay(s.date);
         const paidCount = s.players.filter(p => p.payment_status === 'Paid').length;
         
+        // Generate player options for the join dropdown
+        const pOptions = masterPlayers.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+
         document.getElementById('session-detail-content').innerHTML = `
             <div class="bg-white rounded-3xl shadow-xl p-6 card-border-top animate-fadeIn">
                 <div class="flex justify-between items-start mb-2">
@@ -329,7 +375,10 @@ const _supabase = supabase.createClient(SB_URL, SB_KEY);
                     <button onclick="copyToWhatsApp()" class="text-green-600 font-bold text-xs bg-green-50 px-3 py-2 rounded-xl uppercase">Copy List</button>
                 </div>
                 <div class="flex gap-3 mb-8">
-                    <input type="text" id="join-name" placeholder="Your Name" class="flex-1 bg-gray-100 rounded-2xl px-5 py-4 outline-none">
+                    <select id="join-player-id" class="flex-1 bg-gray-100 rounded-2xl px-5 py-4 outline-none text-sm appearance-none">
+                        <option value="">Select Your Name...</option>
+                        ${pOptions}
+                    </select>
                     <button onclick="joinSession()" class="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black uppercase shadow-lg">${isFull ? 'Waitlist' : 'Join'}</button>
                 </div>
                 <div class="flex justify-between items-center mb-3">
@@ -362,14 +411,26 @@ const _supabase = supabase.createClient(SB_URL, SB_KEY);
     }
 
     async function joinSession() {
-        const name = document.getElementById('join-name').value.trim();
-        if (!name) return;
+        const playerId = document.getElementById('join-player-id').value;
+        if (!playerId) return Swal.fire('Wait!', 'Please select your name', 'info');
+        
+        const player = masterPlayers.find(p => p.id == playerId);
         const s = allData.find(x => x.id === currentSessionId);
+        
+        // Prevent duplicate registration for the same person in the same session
+        const exists = s.registrations.some(r => r.player_id == playerId);
+        if (exists) return Swal.fire('Error', 'You are already registered for this session!', 'error');
+
         const status = s.players.length >= s.capacity ? 'Waitlist' : 'Confirmed';
         
-        await _supabase.from('registrations').insert([{ session_id: currentSessionId, player_name: name, status: status }]);
+        await _supabase.from('registrations').insert([{ 
+            session_id: currentSessionId, 
+            player_id: playerId, 
+            player_name: player.name, 
+            status: status 
+        }]);
         
-        await logAction('PLAYER_REGISTERED', `Joined as ${status}`, name, `${s.date} ${s.time}`);
+        await logAction('PLAYER_REGISTERED', `Joined as ${status}`, player.name, `${s.date} ${s.time}`);
         loadData();
     }
 
@@ -378,18 +439,16 @@ const _supabase = supabase.createClient(SB_URL, SB_KEY);
         const reg = [...s.players, ...s.waitlist].find(r => r.id === id);
         const newStatus = current === 'Paid' ? 'Unpaid' : 'Paid';
         const action = newStatus === 'Paid' ? 'PLAYER_MARKED_PAID' : 'PLAYER_MARKED_UNPAID';
-
         await _supabase.from('registrations').update({ payment_status: newStatus }).eq('id', id);
-        
-        await logAction(action, `Payment status updated to ${newStatus}`, reg.player_name, `${s.date} ${s.time}`);
+        await logAction(action, `Payment updated to ${newStatus}`, reg.player_name, `${s.date} ${s.time}`);
         loadData();
     }
 
     async function handleRemoval(regId, sid, name) {
         const s = allData.find(x => x.id === sid);
-        const result = await Swal.fire({ title: 'Remove?', text: name, icon: 'warning', showCancelButton: true });
+        const result = await Swal.fire({ title: 'Remove?', text: `Remove ${name} from this session?`, icon: 'warning', showCancelButton: true });
         if (result.isConfirmed) {
-            await logAction('PLAYER_REMOVED', `Removed registration from session`, name, `${s.date} ${s.time}`);
+            await logAction('PLAYER_REMOVED', `Removed from session`, name, `${s.date} ${s.time}`);
             await _supabase.from('registrations').delete().eq('id', regId);
             loadData();
         }
@@ -408,6 +467,5 @@ const _supabase = supabase.createClient(SB_URL, SB_KEY);
 
     window.onload = loadData;
 </script>
-
 </body>
 </html>

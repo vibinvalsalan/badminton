@@ -252,8 +252,8 @@
         masterPlayers = pData || [];
         allData = (sData || []).map(s => ({
             ...s,
-            players: s.registrations.filter(r => r.status === 'Confirmed').sort((a,b) => new Date(a.created_at) - new Date(b.created_at)),
-            waitlist: s.registrations.filter(r => r.status === 'Waitlist').sort((a,b) => new Date(a.created_at) - new Date(b.created_at))
+            players: s.registrations.filter(r => r.status === 'Confirmed'),
+            waitlist: s.registrations.filter(r => r.status === 'Waitlist')
         }));
         renderSessions();
         if (currentSessionId) renderDetailPage();

@@ -269,6 +269,8 @@
         allData.filter(s => new Date(s.date).setHours(0,0,0,0) >= today).forEach(s => {
             const spotsLeft = Math.max(0, s.capacity - s.players.length);
             const waitlistCount = s.waitlist ? s.waitlist.length : 0;
+            const totalConfirmed = s.players.length;
+            const totalPaid = s.players.filter(p => p.payment_status === 'Paid').length;
             
             // State-Driven Fee Logic for Summary View
             const isFeeTBC = !s.fee || s.fee.toLowerCase() === 'tbc';
@@ -296,11 +298,6 @@
                             <span class="text-[9px] font-black px-2 py-1 rounded-full uppercase ${spotsLeft > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}">
                                 ${spotsLeft > 0 ? spotsLeft + ' Left' : 'Full'}
                             </span>
-                            ${waitlistCount > 0 ? `
-                                <span class="text-[9px] font-black px-2 py-1 rounded-full bg-orange-100 text-orange-600 uppercase">
-                                    ${waitlistCount} Waiting
-                                </span>
-                            ` : ''}
                         </div>
                     </div>
 
@@ -311,6 +308,26 @@
                         </p>
                         ${feeBadge}
                     </div>
+
+                    <div class="flex flex-wrap gap-4 mb-8 text-xs font-bold uppercase tracking-wider text-gray-400">
+                        <div>Fee: ${feeDisplay}</div>
+                        <div>Players: <span class="text-gray-700">${totalConfirmed}/${s.capacity}</span></div>
+                        <div>Paid: <span class="text-gray-700">${totalPaid}/${totalConfirmed}</span></div>
+                    </div>
+
+                    <div class="mt-3 pt-3 border-t border-gray-50 flex items-center justify-between">
+                        <p class="text-[11px] text-gray-400 flex items-center gap-1 truncate max-w-[150px]">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path></svg>
+                            ${waitlistCount > 0 ? `
+                                <span class="text-[9px] font-black px-2 py-1 rounded-full bg-orange-100 text-orange-600 uppercase">
+                                    ${waitlistCount} Waiting
+                                </span>
+                            ` : ''}
+                        </p>
+                    </div>
+
+
+
                 </div>`;
             list.appendChild(card);
         });

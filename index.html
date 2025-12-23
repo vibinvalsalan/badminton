@@ -142,10 +142,24 @@
     let currentSessionId = null;
     let isAdmin = localStorage.getItem('isAdmin') === 'true';
 
-    async function logAction(action, details, playerName = null, sessionInfo = null) {
+    async function logAction(action, details, playerName = null, sessionId = null) {
         try {
-            await _supabase.from('audit_logs').insert([{ action, details, player_name: playerName, session_info: sessionInfo }]);
-        } catch (err) { console.error("Log failed", err); }
+            // Validation: session_info is a UUID. 
+            // If sessionId is the descriptive string from your previous code, 
+            // it must be changed to the actual s.id (the UUID).
+            const validSessionId = (sessionId && sessionId.length === 36) ? sessionId : null;
+
+            const { error } = await _supabase.from('audit_logs').insert([{ 
+                action: action, 
+                details: details, 
+                player_name: playerName, 
+                session_info: validSessionId // Matches your 'session_info uuid' column
+            }]);
+            
+            if (error) throw error;
+        } catch (err) { 
+            console.error("Audit Log failed:", err.message); 
+        }
     }
 
     function formatDateWithDay(dateStr) {
@@ -209,17 +223,28 @@
     function showActiveSessions() { hideAdminSubpages(); document.getElementById('admin-active-list').classList.remove('hidden'); renderAdminLists(); }
     function showPastSessions() { hideAdminSubpages(); document.getElementById('admin-past-list').classList.remove('hidden'); renderAdminLists(); }
     function showPlayerManager() { hideAdminSubpages(); document.getElementById('admin-player-manager').classList.remove('hidden'); renderMasterPlayerList(); }
+
     async function showAuditHistory() {
         hideAdminSubpages();
         document.getElementById('admin-audit-list').classList.remove('hidden');
-        const { data } = await _supabase.from('audit_logs').select('*').order('created_at', { ascending: false }).limit(50);
+        
+        // Ordered by your 'created_at' column
+        const { data } = await _supabase
+            .from('audit_logs')
+            .select('*')
+            .order('created_at', { ascending: false }) 
+            .limit(50);
+
         document.getElementById('list-audit').innerHTML = (data || []).map(log => `
             <div class="bg-white p-3 rounded-xl border border-gray-50 text-xs mb-2 shadow-sm">
-                <div class="flex justify-between mb-1"><span class="font-black text-blue-600 uppercase">${log.action}</span><span class="text-gray-300">${new Date(log.created_at).toLocaleTimeString()}</span></div>
+                <div class="flex justify-between mb-1">
+                    <span class="font-black text-blue-600 uppercase">${log.action}</span>
+                    <span class="text-gray-300">${new Date(log.created_at).toLocaleTimeString()}</span>
+                </div>
                 <p class="text-gray-600">${log.details}</p>
                 ${log.player_name ? `<p class="text-[10px] font-bold text-gray-400 mt-1">Player: ${log.player_name}</p>` : ''}
             </div>`).join('') || '<p class="text-center text-gray-400 italic">No logs found</p>';
-    }
+    }    
 
     async function loadData() {
         const { data: sData } = await _supabase.from('sessions').select('*, registrations(*)');

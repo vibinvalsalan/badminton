@@ -460,7 +460,7 @@ function renderDetailPage() {
     function copyToWhatsApp() {
         const s = allData.find(x => x.id === currentSessionId);
         if (!s) return;
-        const pList = s.players.map((p, i) => `${i + 1}. ${p.player_name}${p.payment_status === 'Paid' ? ' ✅' : ''}`).join('\n');
+        const pList = s.players.map((p, i) => `${i + 1}. ${p.player_name}${p.payment_status === 'Paid' ? ' *Paid*' : ''}`).join('\n');
         const wList = s.waitlist.length > 0 ? `\n\n*Waitlist:*\n${s.waitlist.map((p, i) => `W${i+1}. ${p.player_name}`).join('\n')}` : '';
         const msg = `🏸 *BADMINTON*\n📅 *Date:* ${formatDateWithDay(s.date)}\n⏰ *Time:* ${s.time}\n📍 *Loc:* ${s.location}\n💰 *Fee:* ${s.fee}\n\n*Confirmed:*\n${pList || '_None_'}${wList}`;
         navigator.clipboard.writeText(msg).then(() => Swal.fire({ toast: true, position: 'top', icon: 'success', title: 'Copied to clipboard!', showConfirmButton: false, timer: 1500 }));

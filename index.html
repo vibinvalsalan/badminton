@@ -627,11 +627,39 @@ function renderDetailPage() {
         }
     }
 
-    async function handlePayment(id, current) {
+    async function handlePayment_v_delete(id, current) {
         const newStatus = current === 'Paid' ? 'Unpaid' : 'Paid';
         await _supabase.from('registrations').update({ payment_status: newStatus }).eq('id', id);
         loadData();
     }
+
+
+    async function handlePayment(id, currentStatus) {
+        const newStatus = currentStatus === 'Paid' ? 'Unpaid' : 'Paid';
+        
+        // 1. Find the registration and session details for the log
+        const session = allData.find(s => s.registrations.some(r => r.id == id));
+        const reg = session.registrations.find(r => r.id == id);
+        
+        // 2. Update the database
+        const { error } = await _supabase.from('registrations')
+            .update({ payment_status: newStatus })
+            .eq('id', id);
+
+        if (!error) {
+            // 3. Add an entry to the audit table
+            const action = newStatus === 'Paid' ? 'PLAYER_PAID' : 'PLAYER_UNPAID';
+            const detailMsg = `${reg.player_name} marked as ${newStatus} for session on ${session.date}`;
+            
+            await logAction(action, detailMsg, reg.player_name, session.id);
+            
+            // 4. Refresh the UI
+            loadData();
+        } else {
+            Swal.fire('Error', 'Could not update payment status', 'error');
+        }
+    }    
+
 
     async function handleRemoval(regId, sid, name) {
         const result = await Swal.fire({ title: 'Remove?', text: name, icon: 'warning', showCancelButton: true });

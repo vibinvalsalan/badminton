@@ -568,7 +568,7 @@ function renderDetailPage() {
     }
 
     // --- SESSION OPS ---
-    async function joinSession() {
+    async function joinSession_Delete() {
         const playerId = document.getElementById('join-player-id').value;
         if (!playerId) return;
         const player = masterPlayers.find(p => p.id == playerId);
@@ -579,6 +579,64 @@ function renderDetailPage() {
         await logAction('PLAYER_REGISTERED', `${player.name} joined as ${status} for session on ${session.date} (${session.time})`, player.name, currentSessionId);
         loadData();
     }
+
+
+    async function joinSession() {
+        const playerId = document.getElementById('join-player-id').value;
+        const player = masterPlayers.find(p => p.id == playerId);
+        const session = allData.find(s => s.id === currentSessionId);
+
+        if (!player || !session) return;
+
+        // Determine status based on capacity
+        const status = session.players.length < session.capacity ? 'Confirmed' : 'Waitlist';
+
+        const { error } = await _supabase.from('registrations').insert([{
+            session_info: session.id,
+            player_id: player.id,
+            player_name: player.name,
+            status: status,
+            payment_status: 'Unpaid'
+        }]);
+
+        if (!error) {
+            // Log the action with specific session details
+            await logAction(
+                'PLAYER_REGISTERED', 
+                `${player.name} joined as ${status} for session on ${session.date} (${session.time})`, 
+                player.name, 
+                session.id
+            );
+
+            // Improved Success Message
+            Swal.fire({
+                title: status === 'Confirmed' ? 'Booking Confirmed!' : 'Added to Waitlist',
+                html: `
+                    <div class="text-left bg-gray-50 p-4 rounded-2xl mt-2 text-sm">
+                        <p class="mb-1"><strong>Player:</strong> ${player.name}</p>
+                        <p class="mb-1"><strong>Session:</strong> ${session.time}</p>
+                        <p class="mb-1"><strong>Date:</strong> ${formatDateWithDay(session.date)}</p>
+                        <p><strong>Venue:</strong> ${session.location}</p>
+                    </div>
+                    <p class="mt-4 text-xs text-gray-400 font-bold uppercase tracking-widest">See you on the court!</p>
+                `,
+                icon: 'success',
+                confirmButtonText: 'Great!',
+                confirmButtonColor: '#2563eb',
+                customClass: {
+                    popup: 'rounded-3xl',
+                    confirmButton: 'rounded-xl px-8 py-3 uppercase font-black text-xs'
+                }
+            });
+
+            loadData();
+        } else {
+            Swal.fire('Error', 'You might already be registered for this session.', 'error');
+        }
+    }
+
+
+
 
         // Handles "Join" button state
     function toggleJoinButton() {

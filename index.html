@@ -495,24 +495,25 @@ function renderDetailPage() {
             </div>
 
 
-            <div class="space-y-1">
-                <div class="bg-blue-50 p-4 rounded-2xl mb-6 border border-blue-100">
-                    <h4 class="text-[10px] font-black text-blue-600 uppercase mb-2">Payment Instructions</h4>
-                    <ul class="text-[11px] text-blue-800 space-y-2 leading-relaxed">
-                        <li class="flex gap-2">
-                            <span class="font-bold">1.</span> 
-                            <span>Click <strong class="text-blue-600">Mark Paid</strong> only after you have sent your fee to the organizer.</span>
-                        </li>
-                        <li class="flex gap-2">
-                            <span class="font-bold">2.</span> 
-                            <span>The button will turn green (<strong class="text-green-600">✓ Paid</strong>) to confirm your status.</span>
-                        </li>
-                        <li class="flex gap-2">
-                            <span class="font-bold">3.</span> 
-                            <span>Made a mistake? Tap the green button again to revert to unpaid.</span>
-                        </li>
-                    </ul>
-                </div>
+            <div class="bg-blue-50 p-4 rounded-2xl mb-6 border border-blue-100">
+                <h4 class="text-[10px] font-black text-blue-600 uppercase mb-2">Instructions</h4>
+                <ul class="text-[11px] text-blue-800 space-y-2 leading-relaxed">
+                    <li class="flex gap-2">
+                        <span class="font-bold">1.</span> 
+                        <span>Click <strong class="text-blue-600">Mark Paid</strong> once you have sent your fee to the organizer.</span>
+                    </li>
+                    <li class="flex gap-2">
+                        <span class="font-bold">2.</span> 
+                        <span>Made a mistake? Tap the green button again to revert to unpaid.</span>
+                    </li>
+                    <li class="flex gap-2">
+                        <span class="font-bold">3.</span> 
+                        <span><strong>If you can no longer attend,remove yourself by </strong> Clicking the red <strong class="text-red-500">✕</strong> icon next to your name if you can no longer attend.</span>
+                    </li>
+                </ul>
+            </div>
+
+
                 <p class="text-[10px] font-black text-gray-400 uppercase mb-3">Participants</p>
                 ${s.players.map(p => `
                     <div class="group flex justify-between items-center p-3 rounded-xl hover:bg-gray-50 transition-colors border border-transparent">
@@ -532,10 +533,13 @@ function renderDetailPage() {
                                 </button>
                             `}
                             
-                            <button onclick="handleRemoval('${p.id}', '${s.id}', '${p.player_name}')" 
-                                class="text-red-300 hover:text-red-600 transition-colors pl-4 border-l border-gray-100">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                            </button>
+                                <button onclick="handleRemoval('${p.id}', '${s.id}', '${p.player_name}')" 
+                                    class="text-gray-300 hover:text-red-500 transition-all p-2 ml-2 rounded-full hover:bg-red-50"
+                                    title="Remove Player">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                    </svg>
+                                </button>
                         </div>
                     </div>
                 `).join('')}
@@ -766,18 +770,26 @@ function renderDetailPage() {
     }
 
     async function handleRemoval(regId, sid, name) {
-        const result = await Swal.fire({ 
-            title: 'Remove Player?', 
-            text: `Are you sure you want to remove ${name}?`, 
-            icon: 'warning', 
-            showCancelButton: true
+        // 1. Trigger a high-visibility styled modal
+        const result = await Swal.fire({
+            title: 'Remove Player?',
+            html: `Are you sure you want to remove <b>${name}</b>?<br><small class="text-gray-500">This will free up their spot for someone else.</small>`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#ef4444', // Red for danger/removal
+            cancelButtonColor: '#6b7280',  // Gray for cancel
+            confirmButtonText: 'Yes, remove them',
+            cancelButtonText: 'Keep on list',
+            reverseButtons: true, // Puts 'Cancel' on the left, which is better for mobile UX
+            customClass: {
+                popup: 'rounded-3xl',
+                confirmButton: 'rounded-xl px-6 py-3 text-sm font-bold uppercase',
+                cancelButton: 'rounded-xl px-6 py-3 text-sm font-bold uppercase'
+            }
         });
 
         if (result.isConfirmed) {
-            // Find the session object to extract details
             const session = allData.find(s => s.id === sid);
-            
-            // Construct a rich detail message
             const logDetails = session 
                 ? `Removed ${name} from session on ${session.date} (${session.time})`
                 : `Removed ${name} from session ID: ${sid}`;
@@ -785,18 +797,21 @@ function renderDetailPage() {
             const { error } = await _supabase.from('registrations').delete().eq('id', regId);
 
             if (!error) {
-                // Log with the rich detail message
+                // 2. Log the action for administrative audit
                 await logAction('PLAYER_REMOVED', logDetails, name, sid);
+                
+                // 3. Refresh and show a quick success toast
                 loadData();
-
-                                Swal.fire({
+                Swal.fire({
                     toast: true,
                     position: 'top',
                     icon: 'success',
-                    title: 'Player removed',
+                    title: 'Player removed successfully',
                     showConfirmButton: false,
                     timer: 1500
                 });
+            } else {
+                Swal.fire('Error', 'Could not remove player. Please try again.', 'error');
             }
         }
     }

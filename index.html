@@ -246,7 +246,7 @@
             </div>`).join('') || '<p class="text-center text-gray-400 italic">No logs found</p>';
     }    
 
-    async function loadData() {
+    async function loadData_old() {
         const { data: sData } = await _supabase.from('sessions').select('*, registrations(*)');
         const { data: pData } = await _supabase.from('players').select('*').order('name');
         masterPlayers = pData || [];
@@ -259,6 +259,24 @@
         if (currentSessionId) renderDetailPage();
         if (isAdmin) renderAdminLists();
     }
+
+    async function loadData() {
+        const { data: sData } = await _supabase
+            .from('sessions')
+            .select('*, registrations(*)')
+            // This ensures the DB returns registrations in the order they joined (by creation time)
+            .order('created_at', { foreignTable: 'registrations', ascending: true });
+        const { data: pData } = await _supabase.from('players').select('*').order('name');
+        masterPlayers = pData || [];
+        allData = (sData || []).map(s => ({
+            ...s,
+            players: s.registrations.filter(r => r.status === 'Confirmed'),
+            waitlist: s.registrations.filter(r => r.status === 'Waitlist')
+        }));
+        renderSessions();
+        if (currentSessionId) renderDetailPage();
+        if (isAdmin) renderAdminLists();
+    }    
 
 
 
@@ -603,7 +621,7 @@ function renderDetailPage() {
             // Log the action with specific session details
             await logAction(
                 'PLAYER_REGISTERED', 
-                `${player.name} joined as ${status} for session on ${session.date} (${session.time})`, 
+                `${player.name} joined for session on ${session.date} (${session.time}) , Status : ${status}`, 
                 player.name, 
                 session.id
             );
@@ -732,7 +750,7 @@ function renderDetailPage() {
             
             // Construct a rich detail message
             const logDetails = session 
-                ? `Removed ${name} from session on ${session.date} (${session.time}) at ${session.location}`
+                ? `Removed ${name} from session on ${session.date} (${session.time})`
                 : `Removed ${name} from session ID: ${sid}`;
 
             const { error } = await _supabase.from('registrations').delete().eq('id', regId);

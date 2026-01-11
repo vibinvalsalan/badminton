@@ -589,7 +589,7 @@ function renderDetailPage() {
         if (!player || !session) return;
 
         // Determine status based on capacity
-        const status = session.players.length >= session.capacity ? 'Confirmed' : 'Waitlist';
+        const status = session.players.length >= session.capacity ? 'Waitlist' : 'Confirmed';
 
         const { error } = await _supabase.from('registrations').insert([{
             session_id: session.id,

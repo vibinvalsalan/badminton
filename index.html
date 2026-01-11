@@ -494,7 +494,25 @@ function renderDetailPage() {
                 </div>
             </div>
 
+
             <div class="space-y-1">
+                <div class="bg-blue-50 p-4 rounded-2xl mb-6 border border-blue-100">
+                    <h4 class="text-[10px] font-black text-blue-600 uppercase mb-2">Payment Instructions</h4>
+                    <ul class="text-[11px] text-blue-800 space-y-2 leading-relaxed">
+                        <li class="flex gap-2">
+                            <span class="font-bold">1.</span> 
+                            <span>Click <strong class="text-blue-600">Mark Paid</strong> only after you have sent your fee to the organizer.</span>
+                        </li>
+                        <li class="flex gap-2">
+                            <span class="font-bold">2.</span> 
+                            <span>The button will turn green (<strong class="text-green-600">✓ Paid</strong>) to confirm your status.</span>
+                        </li>
+                        <li class="flex gap-2">
+                            <span class="font-bold">3.</span> 
+                            <span>Made a mistake? Tap the green button again to revert to unpaid.</span>
+                        </li>
+                    </ul>
+                </div>
                 <p class="text-[10px] font-black text-gray-400 uppercase mb-3">Participants</p>
                 ${s.players.map(p => `
                     <div class="group flex justify-between items-center p-3 rounded-xl hover:bg-gray-50 transition-colors border border-transparent">

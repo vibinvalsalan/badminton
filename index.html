@@ -573,10 +573,10 @@ function renderDetailPage() {
         if (!playerId) return;
         const player = masterPlayers.find(p => p.id == playerId);
         const s = allData.find(x => x.id === currentSessionId);
-        if (s.registrations.some(r => r.player_id == playerId)) return Swal.fire('Error', 'Already registered', 'error');
+        if (s.registrations.some(r => r.player_id == playerId)) return Swal.fire('Error', 'Player name is already registered', 'error');
         const status = s.players.length >= s.capacity ? 'Waitlist' : 'Confirmed';
         await _supabase.from('registrations').insert([{ session_id: currentSessionId, player_id: playerId, player_name: player.name, status: status }]);
-        await logAction('PLAYER_REGISTERED', `Joined as ${status}`, player.name, `${s.date} ${s.time}`);
+        await logAction('PLAYER_REGISTERED', `${player.name} joined as ${status} for session on ${session.date} (${session.time})`, player.name, currentSessionId);
         loadData();
     }
 
@@ -627,12 +627,6 @@ function renderDetailPage() {
         }
     }
 
-    async function handlePayment_v_delete(id, current) {
-        const newStatus = current === 'Paid' ? 'Unpaid' : 'Paid';
-        await _supabase.from('registrations').update({ payment_status: newStatus }).eq('id', id);
-        loadData();
-    }
-
 
     async function handlePayment(id, currentStatus) {
         const newStatus = currentStatus === 'Paid' ? 'Unpaid' : 'Paid';
@@ -661,10 +655,48 @@ function renderDetailPage() {
     }    
 
 
-    async function handleRemoval(regId, sid, name) {
+    async function handleRemoval_Old(regId, sid, name) {
         const result = await Swal.fire({ title: 'Remove?', text: name, icon: 'warning', showCancelButton: true });
         if (result.isConfirmed) { await _supabase.from('registrations').delete().eq('id', regId); loadData(); }
     }
+
+    async function handleRemoval(regId, sid, name) {
+        const result = await Swal.fire({ 
+            title: 'Remove Player?', 
+            text: `Are you sure you want to remove ${name}?`, 
+            icon: 'warning', 
+            showCancelButton: true
+        });
+
+        if (result.isConfirmed) {
+            // Find the session object to extract details
+            const session = allData.find(s => s.id === sid);
+            
+            // Construct a rich detail message
+            const logDetails = session 
+                ? `Removed ${name} from session on ${session.date} (${session.time}) at ${session.location}`
+                : `Removed ${name} from session ID: ${sid}`;
+
+            const { error } = await _supabase.from('registrations').delete().eq('id', regId);
+
+            if (!error) {
+                // Log with the rich detail message
+                await logAction('PLAYER_REMOVED', logDetails, name, sid);
+                loadData();
+
+                                Swal.fire({
+                    toast: true,
+                    position: 'top',
+                    icon: 'success',
+                    title: 'Player removed',
+                    showConfirmButton: false,
+                    timer: 1500
+                });
+            }
+        }
+    }
+
+    
 
     function verifyAdmin() { if (document.getElementById('admin-pass').value === 'admin123') { isAdmin = true; localStorage.setItem('isAdmin', 'true'); goToAdmin(); } }
     function logoutAdmin() { isAdmin = false; localStorage.removeItem('isAdmin'); location.reload(); }

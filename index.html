@@ -187,7 +187,7 @@
             screen: `${screen.width}x${screen.height}`
         };
 
-        const details = `Access ID: ${accessId} | ${specs.ua} | ${specs.screen} | `;
+        const details = `Access ID: ${accessId} | ${browser} | ${specs.screen} | `;
 
         // 4. Log to your Supabase audit_logs
         await logAction('UNIQUE_ACCESS', details, 'Visitor', null);

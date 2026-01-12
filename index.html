@@ -178,7 +178,7 @@
 
         // Reusing your existing logAction function
         // We use 'System' as the player name since they haven't joined yet
-        await logAction('PAGE_VISIT', `User accessed site via ${browser}`, 'Visitor', null);
+        await logAction('PAGE_VISIT', `User accessed site via ${browser} : ${ua}`, 'Visitor', null);
     }
 
     function formatDateWithDay(dateStr) {

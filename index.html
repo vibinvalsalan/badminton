@@ -143,6 +143,8 @@
     let currentSessionId = null;
     let isAdmin = localStorage.getItem('isAdmin') === 'true';
 
+
+
     async function logAction(action, details, playerName = null, sessionId = null) {
         try {
             // Validation: session_info is a UUID. 
@@ -161,6 +163,22 @@
         } catch (err) { 
             console.error("Audit Log failed:", err.message); 
         }
+    }
+
+    async function logVisit() {
+        let browser = "Unknown Browser";
+        const ua = navigator.userAgent;
+        
+        // Simple logic to identify the device/browser
+        if (ua.includes("iPhone") || ua.includes("iPad")) browser = "iOS Device";
+        else if (ua.includes("Android")) browser = "Android Device";
+        else if (ua.includes("Chrome")) browser = "Chrome";
+        else if (ua.includes("Safari") && !ua.includes("Chrome")) browser = "Safari";
+        else if (ua.includes("Firefox")) browser = "Firefox";
+
+        // Reusing your existing logAction function
+        // We use 'System' as the player name since they haven't joined yet
+        await logAction('PAGE_VISIT', `User accessed site via ${browser}`, 'Visitor', null);
     }
 
     function formatDateWithDay(dateStr) {
@@ -862,6 +880,7 @@ function renderDetailPage() {
     }
 
     window.onload = async () => {
+        await logVisit();
         await loadData(); // Load all data first
         
         // Check if there is a session ID in the URL

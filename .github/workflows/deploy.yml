@@ -25,6 +25,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Inject Build Number
+        run: |
+          # This replaces the placeholder with the actual GitHub run number
+          sed -i "s/#BUILD_NUMBER#/${{ github.run_number }}/g" index.html  
+
       - name: Inject Secrets
         run: |
           sed -i "s|VITE_SUPABASE_URL|${{ secrets.SUPABASE_URL }}|g" index.html

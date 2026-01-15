@@ -880,7 +880,7 @@ function renderDetailPage() {
             // 1. Fetch the password from your new Supabase table
             const { data, error } = await _supabase
                 .from('app_settings')
-                .select('value')
+                .select('value','name')
                 .eq('key', 'admin_password')
                 .eq('value', password)
                 .maybeSingle();

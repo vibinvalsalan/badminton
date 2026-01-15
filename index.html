@@ -236,7 +236,7 @@
         renderSessions();
     }
 
-    function goToAdmin() {
+    function goToAdmin_delete() {
         hideAllViews();
         document.getElementById('view-admin').classList.remove('hidden');
         document.getElementById('back-btn').classList.remove('hidden');
@@ -249,6 +249,24 @@
             document.getElementById('admin-auth').classList.remove('hidden');
         }
     }
+
+    function goToAdmin() {
+        hideAllViews();
+        hideAdminSubpages(); // This ensures sub-lists like 'admin-active-list' stay hidden
+        document.getElementById('view-admin').classList.remove('hidden');
+        document.getElementById('back-btn').classList.remove('hidden');
+        document.getElementById('admin-nav-btn').classList.add('hidden');
+        document.getElementById('nav-title').innerText = "Admin Dashboard";
+        
+        if (isAdmin) {
+            document.getElementById('admin-dashboard').classList.remove('hidden');
+        } else {
+            // If you've removed the static admin-auth div as discussed previously, 
+            // ensure you trigger verifyAdmin() here if not logged in.
+            verifyAdmin(); 
+        }
+    }
+
 
     // --- ADMIN NAVIGATION ---
     function showActiveSessions() { hideAdminSubpages(); document.getElementById('admin-active-list').classList.remove('hidden'); renderAdminLists(); }
@@ -371,69 +389,11 @@
         });
 }
 
-
-    function renderSessions_v_0() {
-        const list = document.getElementById('session-list');
-        list.innerHTML = '';
-        const today = new Date().setHours(0,0,0,0);
-        
-        allData.filter(s => new Date(s.date).setHours(0,0,0,0) >= today).forEach(s => {
-            const spotsLeft = Math.max(0, s.capacity - s.players.length);
-            const waitlistCount = s.waitlist ? s.waitlist.length : 0;
-            const paidCount = s.players.filter(p => p.payment_status === 'Paid').length;
-            
-            const card = document.createElement('div');
-            // Tightened padding and layout for a cleaner look
-            card.className = "bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex items-center gap-4 cursor-pointer hover:shadow-md transition-all active:scale-[0.98] mb-3";
-            card.onclick = () => showDetail(s.id);
-            
-            card.innerHTML = `
-                <div class="flex-shrink-0 w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-xl">
-                    🏸
-                </div>
-                
-                <div class="flex-1 min-w-0">
-                    <div class="flex justify-between items-start mb-1">
-                        <div>
-                            <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest">${formatDateWithDay(s.date)}</p>
-                            <h3 class="text-lg font-black text-gray-900 leading-tight">${s.time}</h3>
-                        </div>
-                        <span class="text-[9px] font-black px-2 py-1 rounded-full uppercase ${spotsLeft > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}">
-                            ${spotsLeft > 0 ? spotsLeft + ' Left' : 'Full'}
-                        </span>
-                    </div>
-
-                    <div class="flex items-center gap-1.5 mb-1">
-                        <svg class="w-3 h-3 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path></svg>
-                        <p class="text-xs text-gray-400 truncate">${s.location}</p>
-                    </div>
-
-                    <div class="flex items-center gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-tight">
-                        <span class="flex items-center gap-1">
-                            <span>FEE:</span> 
-                            <span class="text-blue-600">${s.fee}</span>
-                        </span>
-                        <span class="text-gray-200">•</span>
-                        <span>PLAYERS: <span class="text-blue-600">${s.players.length}/${s.capacity}</span></span>
-                        <span class="text-gray-200">•</span>
-                        <span>PAID: <span class="text-blue-600">${paidCount}/${s.players.length}</span></span>
-                    </div>
-
-                    ${waitlistCount > 0 ? `
-                        <div class="mt-2 flex items-center gap-1">
-                            <div class="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse"></div>
-                            <p class="text-[9px] font-black text-orange-500 uppercase">${waitlistCount} on waiting list</p>
-                        </div>
-                    ` : ''}
-                </div>`;
-            list.appendChild(card);
-        });
-    } 
-
     function renderAdminLists() {
         const activeContainer = document.getElementById('list-active');
         const pastContainer = document.getElementById('list-past');
         const today = new Date().setHours(0,0,0,0);
+        
         if (activeContainer) activeContainer.innerHTML = '';
         if (pastContainer) pastContainer.innerHTML = '';
 
@@ -441,8 +401,8 @@
             const isPast = new Date(s.date).setHours(0,0,0,0) < today;
             const target = isPast ? pastContainer : activeContainer;
             if (!target) return;
+            
             const paidCount = s.players.filter(p => p.payment_status === 'Paid').length;
-
             const item = document.createElement('div');
             item.className = "bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex justify-between items-center mb-2";
             item.innerHTML = `
@@ -459,6 +419,8 @@
             target.appendChild(item);
         });
     }
+
+
 
     function showDetail(id) {
         currentSessionId = id; hideAllViews();
@@ -864,20 +826,28 @@ function renderDetailPage() {
 
 
     async function verifyAdmin() {
-        // 1. If already logged in, skip login and go straight to the dashboard
+        // 1. If already logged in, skip password and go straight to dashboard
         if (isAdmin) {
-            openDashboard();
+            hideAllViews();
+            document.getElementById('view-admin').classList.remove('hidden');
+            document.getElementById('admin-dashboard').classList.remove('hidden');
+            document.getElementById('nav-title').innerText = "Admin Dashboard";
+            document.getElementById('back-btn').classList.remove('hidden');
+            document.getElementById('admin-nav-btn').classList.add('hidden');
             return; 
         }
 
-        // 2. Not logged in? Ask for password
+        // 2. If not logged in, ask for password
         const { value: password } = await Swal.fire({
             title: 'Admin Access',
             input: 'password',
             inputPlaceholder: 'Enter admin password',
             showCancelButton: true,
             confirmButtonColor: '#2563eb',
-            customClass: { popup: 'rounded-3xl', input: 'rounded-xl' }
+            customClass: {
+                popup: 'rounded-3xl',
+                input: 'rounded-xl'
+            }
         });
 
         if (password) {
@@ -893,38 +863,25 @@ function renderDetailPage() {
                 return;
             }
 
+            // 3. Check if data exists (meaning password was found)
             if (data) {
                 isAdmin = true;
                 adminName = data.name;
                 localStorage.setItem('isAdmin', 'true');
                 localStorage.setItem('adminName', adminName);
                 
-                // 3. Go straight to the dashboard
-                openDashboard();
+                // Navigate to Dashboard
+                hideAllViews();
+                document.getElementById('view-admin').classList.remove('hidden');
+                document.getElementById('admin-dashboard').classList.remove('hidden');
+                document.getElementById('nav-title').innerText = "Admin Dashboard";
+                document.getElementById('back-btn').classList.remove('hidden');
+                document.getElementById('admin-nav-btn').classList.add('hidden');
             } else {
                 Swal.fire('Access Denied', 'Incorrect password', 'error');
             }
         }
     }
-
-    // Helper function to force open the correct dashboard view
-    function openDashboard() {
-        hideAllViews();
-        document.getElementById('view-admin').classList.remove('hidden');
-        
-        // Hide the "subadmin" selection list if it exists
-        const subAdminMenu = document.getElementById('admin-menu'); 
-        if(subAdminMenu) subAdminMenu.classList.add('hidden');
-
-        // Show the actual management list
-        document.getElementById('admin-active-list').classList.remove('hidden');
-        document.getElementById('admin-dashboard').classList.remove('hidden');
-        
-        document.getElementById('nav-title').innerText = "Admin Dashboard";
-        document.getElementById('back-btn').classList.remove('hidden');
-        document.getElementById('admin-nav-btn').classList.add('hidden');
-    }
-
 
 
     function logoutAdmin() { isAdmin = false; localStorage.removeItem('isAdmin');localStorage.removeItem('adminName'); location.reload(); }

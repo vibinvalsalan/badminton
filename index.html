@@ -864,6 +864,11 @@ function renderDetailPage() {
 
 
     async function verifyAdmin() {
+        if(isAdmin){
+            return;
+        }
+        goToAdmin();
+
         const { value: password } = await Swal.fire({
             title: 'Admin Access',
             input: 'password',

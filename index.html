@@ -760,7 +760,7 @@ function renderDetailPage() {
 
 			// Dynamic content based on status
 			const isConfirmed = status === 'Confirmed';
-			const modalIcon = isConfirmed ? 'success' : 'warning'; // Success green for confirmed, Warning Amber for waitlist
+			const modalIcon = isConfirmed ? 'success' : 'warning'; // Success green for confirmed, Warn Amber for waitlist
 			const footerText = isConfirmed 
 				? 'See you on the court!' 
 				: 'You are now in the waiting list , Check again to see if a spot opens up!';
@@ -922,7 +922,48 @@ function renderDetailPage() {
 
     
 
-    function verifyAdmin() { if (document.getElementById('admin-pass').value === 'admin123') { isAdmin = true; localStorage.setItem('isAdmin', 'true'); goToAdmin(); } }
+    //function verifyAdmin() { if (document.getElementById('admin-pass').value === 'admin123') { isAdmin = true; localStorage.setItem('isAdmin', 'true'); goToAdmin(); } }
+
+    async function verifyAdmin() {
+        const { value: password } = await Swal.fire({
+            title: 'Admin Access',
+            input: 'password',
+            inputPlaceholder: 'Enter admin password',
+            showCancelButton: true,
+            confirmButtonColor: '#2563eb',
+            customClass: {
+                popup: 'rounded-3xl',
+                input: 'rounded-xl'
+            }
+        });
+
+        if (password) {
+            // 1. Fetch the password from your new Supabase table
+            const { data, error } = await _supabase
+                .from('app_settings')
+                .select('value')
+                .eq('key', 'admin_password')
+                .single();
+
+            if (error) {
+                console.error("Supabase error:", error);
+                Swal.fire('Error', 'Could not verify password. Make sure the password is correct', 'error');
+                return;
+            }
+
+            // 2. Compare and Navigate
+            if (password === data.value) {
+                isAdmin = true;
+                localStorage.setItem('isAdmin', 'true'); // Persist login state
+                document.getElementById('admin-nav-btn').classList.remove('hidden');
+                goToAdmin(); // Corrected function name
+            } else {
+                Swal.fire('Access Denied', 'Incorrect password', 'error');
+            }
+        }
+    }
+
+
     function logoutAdmin() { isAdmin = false; localStorage.removeItem('isAdmin'); location.reload(); }
 
     function showSessionForm(id = null) {

@@ -22,7 +22,7 @@
             </button>
             <h1 id="nav-title" class="font-black tracking-tight text-lg uppercase">🏸 Badminton</h1>
         </div>
-        <button id="admin-nav-btn" onclick="goToAdmin()" class="text-[10px] font-black bg-blue-800 px-3 py-1.5 rounded-lg uppercase tracking-widest">Admin</button>
+        <button id="admin-nav-btn" onclick="verifyAdmin()" class="text-[10px] font-black bg-blue-800 px-3 py-1.5 rounded-lg uppercase tracking-widest">Admin</button>
 
     </nav>
 
@@ -37,10 +37,7 @@
         </div>
 
         <div id="view-admin" class="view-section hidden animate-fadeIn">
-            <div id="admin-auth" class="bg-white p-8 rounded-3xl shadow-xl mt-10">
-                <h2 class="text-2xl font-black mb-6">Admin Login</h2>
-                <button onclick="verifyAdmin()" class="w-full bg-gray-900 text-white p-4 rounded-2xl font-bold">Login</button>
-            </div>
+
 
             <div id="admin-dashboard" class="hidden space-y-4">
                 <div class="flex justify-between items-center mb-6">
@@ -954,7 +951,12 @@ function renderDetailPage() {
             if (password === data.value) {
                 isAdmin = true;
                 localStorage.setItem('isAdmin', 'true'); // Persist login state
-                document.getElementById('admin-nav-btn').classList.remove('hidden');
+                hideAllViews();
+                document.getElementById('view-admin').classList.remove('hidden');
+                document.getElementById('admin-dashboard').classList.remove('hidden');
+                document.getElementById('nav-title').innerText = "Admin Dashboard";
+                document.getElementById('back-btn').classList.remove('hidden');
+                document.getElementById('admin-nav-btn').classList.add('hidden');
                 goToAdmin(); // Corrected function name
             } else {
                 Swal.fire('Access Denied', 'Incorrect password', 'error');

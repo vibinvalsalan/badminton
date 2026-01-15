@@ -938,7 +938,8 @@ function renderDetailPage() {
                 .from('app_settings')
                 .select('value')
                 .eq('key', 'admin_password')
-                .single();
+                .eq('value', password)
+                .maybeSingle();
 
             if (error) {
                 console.error("Supabase error:", error);

@@ -184,7 +184,7 @@
             screen: `${screen.width}x${screen.height}`
         };
 
-        const details = `Access ID: ${accessId} | ${browser} | ${specs.screen} | ${ua} `;
+        const details = `Access ID: ${accessId} | ${browser} | ${specs.screen} `;
 
         // 4. Log to your Supabase audit_logs
         await logAction('UNIQUE_ACCESS', details, 'Visitor', null);
@@ -691,9 +691,10 @@ function renderDetailPage() {
         }]);
 
 		if (!error) {
-            const logMessage = isAdmin? `${adminName} added ${player.name} to session on ${session.date} (${session.time}) , Status : ${status}`:`${player.name} joined session on ${session.date} (${session.time}) , Status : ${status}`
-			await logAction(
-				'PLAYER_REGISTERED', 
+            const actionVerb = isAdmin ? `${adminName} added ${player.name} to` : `${player.name} joined`;
+            const logMessage = `${actionVerb} session on ${session.date} (${session.time}), Status: ${status}`;
+            await logAction(
+				'PLAYER_JOINED_SESSION', 
 				logMessage, 
 				player.name, 
 				session.id
@@ -797,8 +798,12 @@ function renderDetailPage() {
         if (!error) {
             // 3. Add an entry to the audit table
             const action = newStatus === 'Paid' ? 'PLAYER_PAID' : 'PLAYER_UNPAID';
-            const detailMsg = isAdmin? `${adminName} updated ${reg.player_name} as ${newStatus} for session on ${session.date}` : `${reg.player_name} marked as ${newStatus} for session on ${session.date}`;
-            
+            // Define the action verb based on whether an admin or player is performing the update
+            const actionVerb = isAdmin ? `${adminName} updated ${reg.player_name} as` : `${reg.player_name} marked as`;
+
+            // Combine with the shared session details
+            const detailMsg = `${actionVerb} ${newStatus} for session on ${session.date}`;
+
             await logAction(action, detailMsg, reg.player_name, session.id);
             
             // 4. Refresh the UI

@@ -138,6 +138,7 @@
     let masterPlayers = [];
     let currentSessionId = null;
     let isAdmin = localStorage.getItem('isAdmin') === 'true';
+    let adminName = localStorage.getItem('adminName');
 
 
 
@@ -656,62 +657,6 @@ function renderDetailPage() {
         if (isConfirmed) { await _supabase.from('players').delete().eq('id', id); await logAction('ADMIN_PLAYER_DELETED', `Deleted ${name}`); loadData(); }
     }
 
-    async function joinSession_delete() {
-        const playerId = document.getElementById('join-player-id').value;
-        const player = masterPlayers.find(p => p.id == playerId);
-        const session = allData.find(s => s.id === currentSessionId);
-
-        if (!player || !session) return;
-
-        // Determine status based on capacity
-        const status = session.players.length >= session.capacity ? 'Waitlist' : 'Confirmed';
-
-        const { error } = await _supabase.from('registrations').insert([{
-            session_id: session.id,
-            player_id: player.id,
-            player_name: player.name,
-            status: status,
-            payment_status: 'Unpaid'
-        }]);
-
-        if (!error) {
-            // Log the action with specific session details
-            await logAction(
-                'PLAYER_REGISTERED', 
-                `${player.name} joined session on ${session.date} (${session.time}) , Status : ${status}`, 
-                player.name, 
-                session.id
-            );
-
-            // Improved Success Message
-            Swal.fire({
-                title: status === 'Confirmed' ? 'Booking Confirmed!' : 'Added to Waitlist',
-                html: `
-                    <div class="text-left bg-gray-50 p-4 rounded-2xl mt-2 text-sm">
-                        <p class="mb-1"><strong>Player:</strong> ${player.name}</p>
-                        <p class="mb-1"><strong>Session:</strong> ${session.time}</p>
-                        <p class="mb-1"><strong>Date:</strong> ${formatDateWithDay(session.date)}</p>
-                        <p><strong>Venue:</strong> ${session.location}</p>
-                    </div>
-                    <p class="mt-4 text-xs text-gray-400 font-bold uppercase tracking-widest">See you on the court!</p>
-                `,
-                icon: 'success',
-                confirmButtonText: 'Great!',
-                confirmButtonColor: '#2563eb',
-                customClass: {
-                    popup: 'rounded-3xl',
-                    confirmButton: 'rounded-xl px-8 py-3 uppercase font-black text-xs'
-                }
-            });
-
-            loadData();
-        } else {
-            Swal.fire('Error', 'You might already be registered for this session.', 'error');
-        }
-    }
-
-
-
     async function joinSession() {
         const playerId = document.getElementById('join-player-id').value;
         const player = masterPlayers.find(p => p.id == playerId);
@@ -746,9 +691,10 @@ function renderDetailPage() {
         }]);
 
 		if (!error) {
+            const logMessage = isAdmin? `${adminName} added ${player.name} to session on ${session.date} (${session.time}) , Status : ${status}`:`${player.name} joined session on ${session.date} (${session.time}) , Status : ${status}`
 			await logAction(
 				'PLAYER_REGISTERED', 
-				`${player.name} joined session on ${session.date} (${session.time}) , Status : ${status}`, 
+				logMessage, 
 				player.name, 
 				session.id
 			);
@@ -851,7 +797,7 @@ function renderDetailPage() {
         if (!error) {
             // 3. Add an entry to the audit table
             const action = newStatus === 'Paid' ? 'PLAYER_PAID' : 'PLAYER_UNPAID';
-            const detailMsg = `${reg.player_name} marked as ${newStatus} for session on ${session.date}`;
+            const detailMsg = isAdmin? `${adminName} updated ${reg.player_name} as ${newStatus} for session on ${session.date}` : `${reg.player_name} marked as ${newStatus} for session on ${session.date}`;
             
             await logAction(action, detailMsg, reg.player_name, session.id);
             
@@ -863,10 +809,6 @@ function renderDetailPage() {
     }    
 
 
-    async function handleRemoval_Old(regId, sid, name) {
-        const result = await Swal.fire({ title: 'Remove?', text: name, icon: 'warning', showCancelButton: true });
-        if (result.isConfirmed) { await _supabase.from('registrations').delete().eq('id', regId); loadData(); }
-    }
 
     async function handleRemoval(regId, sid, name) {
         // 1. Trigger a high-visibility styled modal
@@ -890,8 +832,8 @@ function renderDetailPage() {
         if (result.isConfirmed) {
             const session = allData.find(s => s.id === sid);
             const logDetails = session 
-                ? `Removed ${name} from session on ${session.date} (${session.time})`
-                : `Removed ${name} from session ID: ${sid}`;
+                ? `${adminName} Removed ${name} from session on ${session.date} (${session.time})`
+                : `${adminName} ${name} from session ID: ${sid}`;
 
             const { error } = await _supabase.from('registrations').delete().eq('id', regId);
 
@@ -915,9 +857,6 @@ function renderDetailPage() {
         }
     }
 
-    
-
-    //function verifyAdmin() { if (document.getElementById('admin-pass').value === 'admin123') { isAdmin = true; localStorage.setItem('isAdmin', 'true'); goToAdmin(); } }
 
     async function verifyAdmin() {
         const { value: password } = await Swal.fire({
@@ -950,7 +889,8 @@ function renderDetailPage() {
             // 2. Compare and Navigate
             if (password === data.value) {
                 isAdmin = true;
-                localStorage.setItem('isAdmin', 'true'); // Persist login state
+                localStorage.setItem('isAdmin', 'true');
+                localStorage.setItem('adminName',data.name); // Persist login state
                 hideAllViews();
                 document.getElementById('view-admin').classList.remove('hidden');
                 document.getElementById('admin-dashboard').classList.remove('hidden');
@@ -965,7 +905,7 @@ function renderDetailPage() {
     }
 
 
-    function logoutAdmin() { isAdmin = false; localStorage.removeItem('isAdmin'); location.reload(); }
+    function logoutAdmin() { isAdmin = false; localStorage.removeItem('isAdmin');localStorage.removeItem('adminName'); location.reload(); }
 
     function showSessionForm(id = null) {
         hideAdminSubpages(); document.getElementById('admin-editor').classList.remove('hidden');

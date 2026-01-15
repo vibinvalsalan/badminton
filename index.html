@@ -750,38 +750,43 @@ function renderDetailPage() {
             payment_status: 'Unpaid'
         }]);
 
-        if (!error) {
-            await logAction(
-                'PLAYER_REGISTERED', 
-                `${player.name} joined session on ${session.date} (${session.time}) , Status : ${status}`, 
-                player.name, 
-                session.id
-            );
+		if (!error) {
+			await logAction(
+				'PLAYER_REGISTERED', 
+				`${player.name} joined session on ${session.date} (${session.time}) , Status : ${status}`, 
+				player.name, 
+				session.id
+			);
 
-            Swal.fire({
-                title: status === 'Confirmed' ? 'Booking Confirmed!' : 'Added to Waitlist',
-                html: `
-                    <div class="text-left bg-gray-50 p-4 rounded-2xl mt-2 text-sm">
-                        <p class="mb-1"><strong>Player:</strong> ${player.name}</p>
-                        <p class="mb-1"><strong>Session:</strong> ${session.time}</p>
-                        <p class="mb-1"><strong>Date:</strong> ${formatDateWithDay(session.date)}</p>
-                        <p><strong>Venue:</strong> ${session.location}</p>
-                    </div>
-                    <p class="mt-4 text-xs text-gray-400 font-bold uppercase tracking-widest">See you on the court!</p>
-                `,
-                icon: 'success',
-                confirmButtonText: 'Great!',
-                confirmButtonColor: '#2563eb',
-                customClass: {
-                    popup: 'rounded-3xl',
-                    confirmButton: 'rounded-xl px-8 py-3 uppercase font-black text-xs'
-                }
-            });
+			// Dynamic content based on status
+			const isConfirmed = status === 'Confirmed';
+			const modalIcon = isConfirmed ? 'success' : 'warn'; // Success green for confirmed, Warn Amber for waitlist
+			const footerText = isConfirmed 
+				? 'See you on the court!' 
+				: 'You are now in the waiting list , Check again to see if a spot opens up!';
 
-            loadData();
-        } else {
-            Swal.fire('Error', 'Could not process registration. Please try again.', 'error');
-        }
+			Swal.fire({
+				title: isConfirmed ? 'Booking Confirmed!' : 'Added to Waitlist',
+				html: `
+					<div class="text-left bg-gray-50 p-4 rounded-2xl mt-2 text-sm">
+						<p class="mb-1"><strong>Player:</strong> ${player.name}</p>
+						<p class="mb-1"><strong>Session:</strong> ${session.time}</p>
+						<p class="mb-1"><strong>Date:</strong> ${formatDateWithDay(session.date)}</p>
+						<p><strong>Venue:</strong> ${session.location}</p>
+					</div>
+					<p class="mt-4 text-xs text-gray-400 font-bold uppercase tracking-widest">${footerText}</p>
+				`,
+				icon: modalIcon,
+				confirmButtonText: isConfirmed ? 'Great!' : 'Understood',
+				confirmButtonColor: '#2563eb',
+				customClass: {
+					popup: 'rounded-3xl',
+					confirmButton: 'rounded-xl px-8 py-3 uppercase font-black text-xs'
+				}
+			});
+
+			loadData();
+		}
     }
 
 

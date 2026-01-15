@@ -243,7 +243,6 @@
         document.getElementById('nav-title').innerText = "Admin Dashboard";
         hideAdminSubpages();
         if (isAdmin) {
-            document.getElementById('admin-auth').classList.add('hidden');
             document.getElementById('admin-dashboard').classList.remove('hidden');
         } else {
             document.getElementById('admin-auth').classList.remove('hidden');
@@ -957,7 +956,7 @@ function renderDetailPage() {
                 document.getElementById('nav-title').innerText = "Admin Dashboard";
                 document.getElementById('back-btn').classList.remove('hidden');
                 document.getElementById('admin-nav-btn').classList.add('hidden');
-                goToAdmin(); // Corrected function name
+                
             } else {
                 Swal.fire('Access Denied', 'Incorrect password', 'error');
             }

@@ -880,7 +880,7 @@ function renderDetailPage() {
             // 1. Fetch the password from your new Supabase table
             const { data, error } = await _supabase
                 .from('app_settings')
-                .select('value','name')
+                .select('value,name')
                 .eq('key', 'admin_password')
                 .eq('value', password)
                 .maybeSingle();
@@ -894,8 +894,9 @@ function renderDetailPage() {
             // 2. Compare and Navigate
             if (password === data.value) {
                 isAdmin = true;
+                adminName = data.name;
                 localStorage.setItem('isAdmin', 'true');
-                localStorage.setItem('adminName',data.name); // Persist login state
+                localStorage.setItem('adminName',adminName); // Persist login state
                 hideAllViews();
                 document.getElementById('view-admin').classList.remove('hidden');
                 document.getElementById('admin-dashboard').classList.remove('hidden');

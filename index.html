@@ -864,11 +864,18 @@ function renderDetailPage() {
 
 
     async function verifyAdmin() {
-        if(isAdmin){
-            return;
+        // 1. If already logged in, skip password and go straight to dashboard
+        if (isAdmin) {
+            hideAllViews();
+            document.getElementById('view-admin').classList.remove('hidden');
+            document.getElementById('admin-dashboard').classList.remove('hidden');
+            document.getElementById('nav-title').innerText = "Admin Dashboard";
+            document.getElementById('back-btn').classList.remove('hidden');
+            document.getElementById('admin-nav-btn').classList.add('hidden');
+            return; 
         }
-        goToAdmin();
 
+        // 2. If not logged in, ask for password
         const { value: password } = await Swal.fire({
             title: 'Admin Access',
             input: 'password',
@@ -882,33 +889,32 @@ function renderDetailPage() {
         });
 
         if (password) {
-            // 1. Fetch the password from your new Supabase table
             const { data, error } = await _supabase
                 .from('app_settings')
-                .select('value,name')
+                .select('value, name')
                 .eq('key', 'admin_password')
                 .eq('value', password)
                 .maybeSingle();
 
             if (error) {
-                console.error("Supabase error:", error);
-                Swal.fire('Error', 'Could not verify password. Make sure the password is correct', 'error');
+                Swal.fire('Error', 'Verification system error', 'error');
                 return;
             }
 
-            // 2. Compare and Navigate
-            if (password === data.value) {
+            // 3. Check if data exists (meaning password was found)
+            if (data) {
                 isAdmin = true;
                 adminName = data.name;
                 localStorage.setItem('isAdmin', 'true');
-                localStorage.setItem('adminName',adminName); // Persist login state
+                localStorage.setItem('adminName', adminName);
+                
+                // Navigate to Dashboard
                 hideAllViews();
                 document.getElementById('view-admin').classList.remove('hidden');
                 document.getElementById('admin-dashboard').classList.remove('hidden');
                 document.getElementById('nav-title').innerText = "Admin Dashboard";
                 document.getElementById('back-btn').classList.remove('hidden');
                 document.getElementById('admin-nav-btn').classList.add('hidden');
-                
             } else {
                 Swal.fire('Access Denied', 'Incorrect password', 'error');
             }

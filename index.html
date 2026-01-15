@@ -760,7 +760,7 @@ function renderDetailPage() {
 
 			// Dynamic content based on status
 			const isConfirmed = status === 'Confirmed';
-			const modalIcon = isConfirmed ? 'success' : 'warn'; // Success green for confirmed, Warn Amber for waitlist
+			const modalIcon = isConfirmed ? 'success' : 'warning'; // Success green for confirmed, Warning Amber for waitlist
 			const footerText = isConfirmed 
 				? 'See you on the court!' 
 				: 'You are now in the waiting list , Check again to see if a spot opens up!';

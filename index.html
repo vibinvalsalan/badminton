@@ -42,6 +42,7 @@
             <div id="admin-dashboard" class="hidden space-y-4">
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-2xl font-black">Admin Menu</h2>
+                    <span id="admin-display-name" class="text-[10px] font-bold uppercase tracking-widest text-blue-200"></span>
                     <button onclick="logoutAdmin()" class="text-red-500 text-[10px] font-black uppercase bg-red-50 px-3 py-2 rounded-lg">Logout</button>
                 </div>
                 
@@ -208,6 +209,7 @@
         document.querySelectorAll('.view-section').forEach(v => v.classList.add('hidden'));
         document.getElementById('back-btn').classList.add('hidden');
         document.getElementById('admin-nav-btn').classList.remove('hidden');
+        document.getElementById('admin-display-name').innerText = "";
     }
 
     function hideAdminSubpages() {
@@ -837,6 +839,7 @@ function renderDetailPage() {
             document.getElementById('nav-title').innerText = "Admin Dashboard";
             document.getElementById('back-btn').classList.remove('hidden');
             document.getElementById('admin-nav-btn').classList.add('hidden');
+            document.getElementById('admin-display-name').innerText = adminName;
             return; 
         }
 
@@ -881,6 +884,7 @@ function renderDetailPage() {
                 document.getElementById('nav-title').innerText = "Admin Dashboard";
                 document.getElementById('back-btn').classList.remove('hidden');
                 document.getElementById('admin-nav-btn').classList.add('hidden');
+                document.getElementById('admin-display-name').innerText = adminName;
             } else {
                 Swal.fire('Access Denied', 'Incorrect password', 'error');
             }
@@ -888,7 +892,13 @@ function renderDetailPage() {
     }
 
 
-    function logoutAdmin() { isAdmin = false; localStorage.removeItem('isAdmin');localStorage.removeItem('adminName'); location.reload(); }
+    function logoutAdmin() {
+        isAdmin = false;
+        localStorage.removeItem('isAdmin');
+        localStorage.removeItem('adminName');
+        document.getElementById('admin-display-name').innerText = "";
+        location.reload();
+    }
 
     function showSessionForm(id = null) {
         hideAdminSubpages(); document.getElementById('admin-editor').classList.remove('hidden');

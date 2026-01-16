@@ -238,20 +238,6 @@
         renderSessions();
     }
 
-    function goToAdmin_delete() {
-        hideAllViews();
-        document.getElementById('view-admin').classList.remove('hidden');
-        document.getElementById('back-btn').classList.remove('hidden');
-        document.getElementById('admin-nav-btn').classList.add('hidden');
-        document.getElementById('nav-title').innerText = "Admin Dashboard";
-        hideAdminSubpages();
-        if (isAdmin) {
-            document.getElementById('admin-dashboard').classList.remove('hidden');
-        } else {
-            document.getElementById('admin-auth').classList.remove('hidden');
-        }
-    }
-
     function goToAdmin() {
         hideAllViews();
         hideAdminSubpages(); // This ensures sub-lists like 'admin-active-list' stay hidden
@@ -260,8 +246,9 @@
         document.getElementById('admin-nav-btn').classList.add('hidden');
         document.getElementById('nav-title').innerText = "Admin Dashboard";
         
-        if (isAdmin) {
+        if (isAdmin && adminName != null) {
             document.getElementById('admin-dashboard').classList.remove('hidden');
+            document.getElementById('admin-display-name').innerText = adminName;
         } else {
             // If you've removed the static admin-auth div as discussed previously, 
             // ensure you trigger verifyAdmin() here if not logged in.
@@ -296,20 +283,6 @@
                 ${log.player_name ? `<p class="text-[10px] font-bold text-gray-400 mt-1">Player: ${log.player_name}</p>` : ''}
             </div>`).join('') || '<p class="text-center text-gray-400 italic">No logs found</p>';
     }    
-
-    async function loadData_old() {
-        const { data: sData } = await _supabase.from('sessions').select('*, registrations(*)');
-        const { data: pData } = await _supabase.from('players').select('*').order('name');
-        masterPlayers = pData || [];
-        allData = (sData || []).map(s => ({
-            ...s,
-            players: s.registrations.filter(r => r.status === 'Confirmed'),
-            waitlist: s.registrations.filter(r => r.status === 'Waitlist')
-        }));
-        renderSessions();
-        if (currentSessionId) renderDetailPage();
-        if (isAdmin) renderAdminLists();
-    }
 
     async function loadData() {
         const { data: sData } = await _supabase

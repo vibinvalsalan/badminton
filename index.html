@@ -827,6 +827,8 @@ function renderDetailPage() {
 
     async function verifyAdmin() {
         // 1. If already logged in, skip password and go straight to dashboard
+        isAdmin = localStorage.getItem('isAdmin') === 'true';
+        adminName = localStorage.getItem('adminName');
         if (isAdmin && adminName != null) {
             hideAllViews();
             hideAdminSubpages();

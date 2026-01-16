@@ -827,8 +827,9 @@ function renderDetailPage() {
 
     async function verifyAdmin() {
         // 1. If already logged in, skip password and go straight to dashboard
-        if (isAdmin) {
+        if (isAdmin && adminName != null) {
             hideAllViews();
+            hideAdminSubpages();
             document.getElementById('view-admin').classList.remove('hidden');
             document.getElementById('admin-dashboard').classList.remove('hidden');
             document.getElementById('nav-title').innerText = "Admin Dashboard";
@@ -872,6 +873,7 @@ function renderDetailPage() {
                 
                 // Navigate to Dashboard
                 hideAllViews();
+                hideAdminSubpages();
                 document.getElementById('view-admin').classList.remove('hidden');
                 document.getElementById('admin-dashboard').classList.remove('hidden');
                 document.getElementById('nav-title').innerText = "Admin Dashboard";

@@ -113,6 +113,13 @@
                             class="w-full bg-gray-100 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 text-sm" 
                             placeholder="Add private notes for this session..."></textarea>
                     </div>
+                    <div class="mb-4 flex items-center justify-between bg-gray-100 p-4 rounded-2xl">
+                        <label class="text-xs font-bold text-gray-500 uppercase">Visible to Players</label>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="f-visible" class="sr-only peer" checked>
+                            <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
+                    </div>
                 </div>
                 <div class="flex gap-2 pt-4">
                     <button onclick="closeEditor()" class="w-1/3 bg-gray-100 font-bold p-4 rounded-2xl">Cancel</button>
@@ -319,7 +326,11 @@
     // 1. Filter out past sessions
     // 2. Sort by date (Ascending: closest date first)
     allData
-        .filter(s => new Date(s.date).setHours(0,0,0,0) >= today)
+        .filter(s => {
+        const isFuture = new Date(s.date).setHours(0,0,0,0) >= today;
+        // ONLY show if it's in the future AND is_visible is not explicitly false
+        return isFuture && s.is_visible !== false;
+        })
         .sort((a, b) => new Date(a.date) - new Date(b.date)) 
         .forEach(s => {
             const spotsLeft = Math.max(0, s.capacity - s.players.length);
@@ -389,6 +400,10 @@
             item.innerHTML = `
                 <div>
                     <p class="text-xs font-bold ${isPast ? 'text-gray-400' : 'text-blue-600'}">${formatDateWithDay(s.date)}</p>
+                    <h4 class="font-black text-gray-800">
+                        ${s.time}
+                        ${s.is_visible === false ? '<span class="ml-2 text-[8px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full uppercase tracking-wider font-black">Hidden</span>' : ''}
+                    </h4>
                     <h4 class="font-black text-gray-800">${s.time}</h4>
                     <p class="text-[10px] text-gray-400 font-bold uppercase">${s.location} • Fee: ${s.fee} • Paid: ${paidCount}/${s.players.length}</p>
                 </div>
@@ -951,8 +966,10 @@
             document.getElementById('f-cap').value = s.capacity;
             document.getElementById('f-fee').value = s.fee;
             document.getElementById('f-notes').value = s.admin_notes || '';
+            document.getElementById('f-visible').checked = s.is_visible !== false;
         } else {
             document.getElementById('edit-id').value = "";
+            document.getElementById('f-visible').checked = true;
             ['f-date', 'f-time', 'f-loc', 'f-cap', 'f-fee'].forEach(i => document.getElementById(i).value = "");
         }
     }
@@ -968,7 +985,8 @@
             location: document.getElementById('f-loc').value, 
             capacity: parseInt(document.getElementById('f-cap').value), 
             fee: document.getElementById('f-fee').value,
-            admin_notes: document.getElementById('f-notes').value 
+            admin_notes: document.getElementById('f-notes').value,
+            is_visible: document.getElementById('f-visible').checked 
         };
 
         let result;

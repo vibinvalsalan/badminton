@@ -534,16 +534,18 @@
                         `).join('')}
                     ` : ''}
 
+                    ${isAdmin ? `
                     <div class="mt-8 pt-6 border-t border-gray-100">
                         <button onclick="toggleSessionLogs('${s.id}')" 
                             class="w-full flex justify-between items-center text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-blue-600 transition-colors">
-                            <span>Session Audit Log</span>
+                            <span>Session Audit Log (Admin Only)</span>
                             <span id="log-chevron-${s.id}">+ Show</span>
                         </button>
                         <div id="session-log-container-${s.id}" class="hidden mt-4 space-y-2 max-h-60 overflow-y-auto pr-2">
                             <p class="text-center text-[10px] text-gray-400 italic py-4">Loading logs...</p>
                         </div>
                     </div>
+                    ` : ''}
 
                 </div>
             </div>`;
@@ -943,13 +945,55 @@
 
     function closeEditor() { hideAdminSubpages(); document.getElementById('admin-active-list').classList.remove('hidden'); }
 
+
     async function saveSession() {
         const sessionId = document.getElementById('edit-id').value;
-        const sData = { date: document.getElementById('f-date').value, time: document.getElementById('f-time').value, location: document.getElementById('f-loc').value, capacity: parseInt(document.getElementById('f-cap').value), fee: document.getElementById('f-fee').value };
-        if (sessionId) await _supabase.from('sessions').update(sData).eq('id', sessionId);
-        else await _supabase.from('sessions').insert([sData]);
-        showActiveSessions(); loadData();
+        const sData = { 
+            date: document.getElementById('f-date').value, 
+            time: document.getElementById('f-time').value, 
+            location: document.getElementById('f-loc').value, 
+            capacity: parseInt(document.getElementById('f-cap').value), 
+            fee: document.getElementById('f-fee').value 
+        };
+
+        let result;
+        let actionType;
+        let logMsg;
+        // Get admin name from state or localStorage
+        const currentAdmin = adminName || localStorage.getItem('adminName') || 'Admin';
+
+        if (sessionId) {
+            // Update existing session
+            actionType = 'SESSION_UPDATED';
+            logMsg = `${currentAdmin} updated session on ${sData.date} (${sData.time})`;
+            result = await _supabase.from('sessions').update(sData).eq('id', sessionId).select().single();
+        } else {
+            // Create new session
+            actionType = 'SESSION_CREATED';
+            logMsg = `${currentAdmin} created a new session for ${sData.date} (${sData.time}) at ${sData.location}`;
+            result = await _supabase.from('sessions').insert([sData]).select().single();
+        }
+
+        if (!result.error) {
+            // Use the ID from the result to ensure accuracy
+            const targetId = sessionId || result.data.id;
+            await logAction(actionType, logMsg, currentAdmin, targetId);
+            
+            showActiveSessions(); 
+            loadData();
+            
+            Swal.fire({
+                icon: 'success',
+                title: sessionId ? 'Session Updated' : 'Session Created',
+                timer: 1500,
+                showConfirmButton: false
+            });
+        } else {
+            Swal.fire('Error', 'Failed to save session', 'error');
+        }
     }
+
+
 
     async function deleteSession(id) {
         const { isConfirmed } = await Swal.fire({ title: 'Delete?', icon: 'warning', showCancelButton: true });

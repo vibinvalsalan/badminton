@@ -138,7 +138,7 @@
                             <p class="text-[9px] text-blue-600 font-medium">Turn off to save as a draft</p>
                         </div>
                         <label class="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" id="f-visible" class="sr-only peer" checked>
+                            <input type="checkbox" id="f-visible" name="f-visible" class="sr-only peer">
                             <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                         </label>
                     </div>
@@ -984,9 +984,13 @@
         location.reload();
     }
 
+
     function showSessionForm(id = null) {
         hideAdminSubpages(); 
-        document.getElementById('admin-editor').classList.remove('hidden');
+        const editor = document.getElementById('admin-editor');
+        editor.classList.remove('hidden'); // Show editor first
+        
+        const visibleToggle = document.getElementById('f-visible');
         
         if (id) {
             const s = allData.find(x => x.id === id);
@@ -997,16 +1001,17 @@
                 document.getElementById('f-loc').value = s.location;
                 document.getElementById('f-cap').value = s.capacity;
                 document.getElementById('f-fee').value = s.fee;
-                // Handle the new fields
                 document.getElementById('f-notes').value = s.admin_notes || '';
-                document.getElementById('f-visible').checked = s.is_visible !== false;
-                console.log(s.is_visible);
+                
+                // FIX: Explicitly set boolean. If s.is_visible is null/undefined, default to true.
+                visibleToggle.checked = (s.is_visible !== false);
+                
                 document.getElementById('editor-title').innerText = "Edit Session";
             }
         } else {
-            // Clear fields for a new session
+            // Reset for NEW session
             document.getElementById('edit-id').value = "";
-            document.getElementById('f-visible').checked = true;
+            visibleToggle.checked = true;
             document.getElementById('editor-title').innerText = "New Session";
             ['f-date', 'f-time', 'f-loc', 'f-cap', 'f-fee', 'f-notes'].forEach(i => {
                 document.getElementById(i).value = "";
@@ -1014,11 +1019,15 @@
         }
     }
 
+
+
+
     function closeEditor() { hideAdminSubpages(); document.getElementById('admin-active-list').classList.remove('hidden'); }
 
 
     async function saveSession() {
         const sessionId = document.getElementById('edit-id').value;
+        const isVisible = document.getElementById('f-visible').checked;
         const sData = { 
             date: document.getElementById('f-date').value, 
             time: document.getElementById('f-time').value, 
@@ -1026,7 +1035,7 @@
             capacity: parseInt(document.getElementById('f-cap').value), 
             fee: document.getElementById('f-fee').value,
             admin_notes: document.getElementById('f-notes').value,
-            is_visible: document.getElementById('f-visible').checked 
+            is_visible: isVisible 
         };
 
         let result;

@@ -404,142 +404,194 @@
         renderDetailPage();
     }
 
-function renderDetailPage() {
-    const s = allData.find(x => x.id === currentSessionId);
-    if (!s) return showHome();
+    function renderDetailPage() {
+        const s = allData.find(x => x.id === currentSessionId);
+        if (!s) return showHome();
 
-    const pOptions = masterPlayers.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-    const totalConfirmed = s.players.length;
-    const totalPaid = s.players.filter(p => p.payment_status === 'Paid').length;
+        const pOptions = masterPlayers.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+        const totalConfirmed = s.players.length;
+        const totalPaid = s.players.filter(p => p.payment_status === 'Paid').length;
 
-    // Logic for Dynamic Fee Status
-    const isFeeTBC = !s.fee || s.fee.toLowerCase() === 'tbc';
-    const feeDisplay = isFeeTBC 
-        ? `<span class="bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase">Pending</span>`
-        : `<span class="text-blue-600 font-bold">${s.fee}</span>`;
+        // Logic for Dynamic Fee Status
+        const isFeeTBC = !s.fee || s.fee.toLowerCase() === 'tbc';
+        const feeDisplay = isFeeTBC 
+            ? `<span class="bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase">Pending</span>`
+            : `<span class="text-blue-600 font-bold">${s.fee}</span>`;
 
-    document.getElementById('session-detail-content').innerHTML = `
-        <div class="bg-white rounded-3xl shadow-xl p-6 card-border-top animate-fadeIn">
-            <div class="flex justify-between items-start mb-6">
-                <div class="space-y-1">
-                    <p class="text-xl font-semibold text-gray-800">${formatDateWithDay(s.date)}</p>
-                    <p class="text-lg text-gray-600 font-medium">${s.time}</p>
-                    <div class="flex items-center gap-1 pt-1">
-                        <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                        <a href="#" class="text-blue-600 hover:underline text-sm font-medium">Venue: ${s.location}</a>
-                    </div>
-                </div>
-                <div class="flex gap-2">
-                    <button onclick="copyToWhatsApp()" class="p-2 bg-gray-50 rounded-xl hover:bg-gray-100 text-gray-500" title="Copy Link">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
-                    </button>
-                    <button onclick="openNativeShare()" class="p-2 bg-gray-50 rounded-xl hover:bg-gray-100 text-gray-500" title="Share">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>
-                    </button>
-                </div>
-            </div>
-
-            <div class="flex flex-wrap gap-4 mb-8 text-xs font-bold uppercase tracking-wider text-gray-400">
-                <div>Fee: ${feeDisplay}</div>
-                <div>Players: <span class="text-blue-600">${totalConfirmed}/${s.capacity}</span></div>
-                <div>Paid: <span class="text-blue-600">${totalPaid}/${totalConfirmed}</span></div>
-            </div>
-
-
-            <div class="bg-blue-50 p-4 rounded-2xl mb-6 border border-blue-100">
-                <h4 class="text-[10px] font-black text-blue-600 uppercase mb-2">Instructions</h4>
-                <ul class="text-[11px] text-blue-800 space-y-2 leading-relaxed">
-                    <li class="flex gap-2">
-                        <span class="font-bold">1.</span> 
-                        <span><strong>Want to play?</strong> Select your name and click <strong class="text-blue-600">Join</strong> to secure your spot.</span>
-                    </li>
-                    <li class="flex gap-2">
-                        <span class="font-bold">2.</span> 
-                        <span><strong>Fee Paid already?</strong>Click (<strong class="text-blue-600">Mark Paid</strong>) button when you have sent your fee to the organizer.</span>
-                    </li>
-                    <li class="flex gap-2">
-                        <span class="font-bold">3.</span> 
-                        <span><strong>Made a mistake with payment update ?</strong> Tap the (<strong class="text-green-600">✓ Paid</strong>) button again to revert to unpaid.</span>
-                    </li>
-                    <li class="flex gap-2">
-                        <span class="font-bold">4.</span> 
-                        <span><strong>Unable to join the session?</strong> Click the <strong class="text-red-500">✕</strong> icon on the far right of your name.</span>
-                    </li>
-                </ul>
-            </div>
-
-
-            <div class="mb-8">
-                <div class="flex gap-3">
-                    <div class="flex-1 relative">
-                        <select id="join-player-id" onchange="toggleJoinButton()" 
-                            class="w-full bg-gray-50 rounded-2xl px-5 py-4 outline-none text-sm appearance-none border-2 border-transparent transition-all">
-                            <option value="">Choose your name...</option>
-                            ${pOptions}
-                        </select>
-                        <p id="join-error" class="hidden text-red-500 text-[10px] mt-1 ml-2 font-bold">Please select a name to continue.</p>
-                    </div>
-                    <button id="join-btn" onclick="validateAndJoin()" 
-                        class="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black uppercase opacity-50 cursor-not-allowed transition-all hover:bg-blue-700">
-                        Join
-                    </button>
-                </div>
-            </div>
-
-
-
-
-
-                <p class="text-[10px] font-black text-gray-400 uppercase mb-3">Participants</p>
-                ${s.players.map(p => `
-                    <div class="group flex justify-between items-center p-3 rounded-xl hover:bg-gray-50 transition-colors border border-transparent">
-                        <span class="font-semibold text-gray-700">${p.player_name}</span>
-                        <div class="flex items-center gap-4">
-                            
-                            ${p.payment_status === 'Paid' ? `
-                                <button onclick="handlePayment('${p.id}', '${p.payment_status}')" 
-                                    class="flex items-center gap-1 text-[10px] px-3 py-1.5 rounded-lg font-black bg-green-100 text-green-700 border border-green-200 uppercase">
-                                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
-                                    Paid
-                                </button>
-                            ` : `
-                                <button onclick="handlePayment('${p.id}', '${p.payment_status}')" 
-                                    class="text-[10px] px-3 py-1.5 rounded-lg font-black bg-blue-600 text-white shadow-sm uppercase tracking-tighter">
-                                    Mark Paid
-                                </button>
-                            `}
-                            
-                                <button onclick="handleRemoval('${p.id}', '${s.id}', '${p.player_name}')" 
-                                    class="text-gray-300 hover:text-red-500 transition-all p-2 ml-2 rounded-full hover:bg-red-50"
-                                    title="Remove Player">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                                    </svg>
-                                </button>
+        document.getElementById('session-detail-content').innerHTML = `
+            <div class="bg-white rounded-3xl shadow-xl p-6 card-border-top animate-fadeIn">
+                <div class="flex justify-between items-start mb-6">
+                    <div class="space-y-1">
+                        <p class="text-xl font-semibold text-gray-800">${formatDateWithDay(s.date)}</p>
+                        <p class="text-lg text-gray-600 font-medium">${s.time}</p>
+                        <div class="flex items-center gap-1 pt-1">
+                            <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                            <a href="#" class="text-blue-600 hover:underline text-sm font-medium">Venue: ${s.location}</a>
                         </div>
                     </div>
-                `).join('')}
-                
-                
-                ${s.waitlist.length > 0 ? `
-                    <p class="text-[10px] font-black text-gray-400 uppercase pt-6 mb-3">Waitlist</p>
-                    ${s.waitlist.map(p => `
-                        <div class="flex justify-between items-center p-3 bg-gray-50 rounded-xl italic">
-                            <span class="text-gray-500 text-sm">${p.player_name}</span>
-                            <button onclick="handleRemoval('${p.id}', '${s.id}', '${p.player_name}')" 
-                                class="text-red-200 hover:text-red-400 transition-colors pl-4 border-l border-gray-200">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                            </button>
+                    <div class="flex gap-2">
+                        <button onclick="copyToWhatsApp()" class="p-2 bg-gray-50 rounded-xl hover:bg-gray-100 text-gray-500" title="Copy Link">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                        </button>
+                        <button onclick="openNativeShare()" class="p-2 bg-gray-50 rounded-xl hover:bg-gray-100 text-gray-500" title="Share">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap gap-4 mb-8 text-xs font-bold uppercase tracking-wider text-gray-400">
+                    <div>Fee: ${feeDisplay}</div>
+                    <div>Players: <span class="text-blue-600">${totalConfirmed}/${s.capacity}</span></div>
+                    <div>Paid: <span class="text-blue-600">${totalPaid}/${totalConfirmed}</span></div>
+                </div>
+
+
+                <div class="bg-blue-50 p-4 rounded-2xl mb-6 border border-blue-100">
+                    <h4 class="text-[10px] font-black text-blue-600 uppercase mb-2">Instructions</h4>
+                    <ul class="text-[11px] text-blue-800 space-y-2 leading-relaxed">
+                        <li class="flex gap-2">
+                            <span class="font-bold">1.</span> 
+                            <span><strong>Want to play?</strong> Select your name and click <strong class="text-blue-600">Join</strong> to secure your spot.</span>
+                        </li>
+                        <li class="flex gap-2">
+                            <span class="font-bold">2.</span> 
+                            <span><strong>Fee Paid already?</strong>Click (<strong class="text-blue-600">Mark Paid</strong>) button when you have sent your fee to the organizer.</span>
+                        </li>
+                        <li class="flex gap-2">
+                            <span class="font-bold">3.</span> 
+                            <span><strong>Made a mistake with payment update ?</strong> Tap the (<strong class="text-green-600">✓ Paid</strong>) button again to revert to unpaid.</span>
+                        </li>
+                        <li class="flex gap-2">
+                            <span class="font-bold">4.</span> 
+                            <span><strong>Unable to join the session?</strong> Click the <strong class="text-red-500">✕</strong> icon on the far right of your name.</span>
+                        </li>
+                    </ul>
+                </div>
+
+
+                <div class="mb-8">
+                    <div class="flex gap-3">
+                        <div class="flex-1 relative">
+                            <select id="join-player-id" onchange="toggleJoinButton()" 
+                                class="w-full bg-gray-50 rounded-2xl px-5 py-4 outline-none text-sm appearance-none border-2 border-transparent transition-all">
+                                <option value="">Choose your name...</option>
+                                ${pOptions}
+                            </select>
+                            <p id="join-error" class="hidden text-red-500 text-[10px] mt-1 ml-2 font-bold">Please select a name to continue.</p>
+                        </div>
+                        <button id="join-btn" onclick="validateAndJoin()" 
+                            class="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black uppercase opacity-50 cursor-not-allowed transition-all hover:bg-blue-700">
+                            Join
+                        </button>
+                    </div>
+                </div>
+
+
+
+
+
+                    <p class="text-[10px] font-black text-gray-400 uppercase mb-3">Participants</p>
+                    ${s.players.map(p => `
+                        <div class="group flex justify-between items-center p-3 rounded-xl hover:bg-gray-50 transition-colors border border-transparent">
+                            <span class="font-semibold text-gray-700">${p.player_name}</span>
+                            <div class="flex items-center gap-4">
+                                
+                                ${p.payment_status === 'Paid' ? `
+                                    <button onclick="handlePayment('${p.id}', '${p.payment_status}')" 
+                                        class="flex items-center gap-1 text-[10px] px-3 py-1.5 rounded-lg font-black bg-green-100 text-green-700 border border-green-200 uppercase">
+                                        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
+                                        Paid
+                                    </button>
+                                ` : `
+                                    <button onclick="handlePayment('${p.id}', '${p.payment_status}')" 
+                                        class="text-[10px] px-3 py-1.5 rounded-lg font-black bg-blue-600 text-white shadow-sm uppercase tracking-tighter">
+                                        Mark Paid
+                                    </button>
+                                `}
+                                
+                                    <button onclick="handleRemoval('${p.id}', '${s.id}', '${p.player_name}')" 
+                                        class="text-gray-300 hover:text-red-500 transition-all p-2 ml-2 rounded-full hover:bg-red-50"
+                                        title="Remove Player">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                        </svg>
+                                    </button>
+                            </div>
                         </div>
                     `).join('')}
-                ` : ''}
+                    
+                    
+                    ${s.waitlist.length > 0 ? `
+                        <p class="text-[10px] font-black text-gray-400 uppercase pt-6 mb-3">Waitlist</p>
+                        ${s.waitlist.map(p => `
+                            <div class="flex justify-between items-center p-3 bg-gray-50 rounded-xl italic">
+                                <span class="text-gray-500 text-sm">${p.player_name}</span>
+                                <button onclick="handleRemoval('${p.id}', '${s.id}', '${p.player_name}')" 
+                                    class="text-red-200 hover:text-red-400 transition-colors pl-4 border-l border-gray-200">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                </button>
+                            </div>
+                        `).join('')}
+                    ` : ''}
+
+                    <div class="mt-8 pt-6 border-t border-gray-100">
+                        <button onclick="toggleSessionLogs('${s.id}')" 
+                            class="w-full flex justify-between items-center text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-blue-600 transition-colors">
+                            <span>Session Audit Log</span>
+                            <span id="log-chevron-${s.id}">+ Show</span>
+                        </button>
+                        <div id="session-log-container-${s.id}" class="hidden mt-4 space-y-2 max-h-60 overflow-y-auto pr-2">
+                            <p class="text-center text-[10px] text-gray-400 italic py-4">Loading logs...</p>
+                        </div>
+                    </div>
+
+                </div>
+            </div>`;
+    }
+
+
+    async function toggleSessionLogs(sid) {
+        const container = document.getElementById(`session-log-container-${sid}`);
+        const chevron = document.getElementById(`log-chevron-${sid}`);
+        
+        // Toggle Visibility
+        if (!container.classList.contains('hidden')) {
+            container.classList.add('hidden');
+            chevron.innerText = "+ Show";
+            return;
+        }
+
+        container.classList.remove('hidden');
+        chevron.innerText = "- Hide";
+
+        // Fetch Logs for this specific session
+        const { data, error } = await _supabase
+            .from('audit_logs')
+            .select('*')
+            .eq('session_info', sid) // Matches your UUID column
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            container.innerHTML = `<p class="text-red-400 text-[10px]">Error loading logs.</p>`;
+            return;
+        }
+
+        if (!data || data.length === 0) {
+            container.innerHTML = `<p class="text-center text-gray-400 text-[10px] py-4 uppercase font-bold">No activity recorded yet</p>`;
+            return;
+        }
+
+        // Render Logs
+        container.innerHTML = data.map(log => `
+            <div class="bg-gray-50 p-2.5 rounded-xl text-[10px] border border-gray-100">
+                <div class="flex justify-between mb-1">
+                    <span class="font-black text-blue-500 uppercase">${log.action.replace(/_/g, ' ')}</span>
+                    <span class="text-gray-300">${new Date(log.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                </div>
+                <p class="text-gray-600 leading-tight">${log.details}</p>
             </div>
-        </div>`;
-}
-
-
-
-
+        `).join('');
+    }
 
 
 
@@ -573,7 +625,7 @@ function renderDetailPage() {
         if (!name) return;
         await _supabase.from('players').insert([{ name }]);
         nameInput.value = '';
-        await logAction('ADMIN_PLAYER_CREATED', `Added ${name} to master list`);
+        await logAction('ADMIN_PLAYER_CREATED', `${adminName} created player ${name}`);
         loadData();
     }
 
@@ -585,13 +637,13 @@ function renderDetailPage() {
         if (!newName) return;
         await _supabase.from('players').update({ name: newName }).eq('id', id);
         await _supabase.from('registrations').update({ player_name: newName }).eq('player_id', id);
-        await logAction('ADMIN_PLAYER_UPDATED', `Changed name to ${newName}`);
+        await logAction('ADMIN_PLAYER_UPDATED', `${adminName} changed name to ${newName}`);
         showPlayerManager(); loadData();
     }
 
     async function deleteMasterPlayer(id, name) {
         const { isConfirmed } = await Swal.fire({ title: 'Remove?', text: name, icon: 'warning', showCancelButton: true });
-        if (isConfirmed) { await _supabase.from('players').delete().eq('id', id); await logAction('ADMIN_PLAYER_DELETED', `Deleted ${name}`); loadData(); }
+        if (isConfirmed) { await _supabase.from('players').delete().eq('id', id); await logAction('ADMIN_PLAYER_DELETED', `${adminName} deleted ${name}`); loadData(); }
     }
 
     async function joinSession() {

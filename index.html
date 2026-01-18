@@ -434,7 +434,6 @@
                         ${s.time}
                         ${s.is_visible === false ? '<span class="ml-2 text-[8px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full uppercase tracking-wider font-black">Hidden</span>' : ''}
                     </h4>
-                    <h4 class="font-black text-gray-800">${s.time}</h4>
                     <p class="text-[10px] text-gray-400 font-bold uppercase">${s.location} • Fee: ${s.fee} • Paid: ${paidCount}/${s.players.length}</p>
                 </div>
                 <div class="flex gap-2">
@@ -986,21 +985,32 @@
     }
 
     function showSessionForm(id = null) {
-        hideAdminSubpages(); document.getElementById('admin-editor').classList.remove('hidden');
+        hideAdminSubpages(); 
+        document.getElementById('admin-editor').classList.remove('hidden');
+        
         if (id) {
             const s = allData.find(x => x.id === id);
-            document.getElementById('edit-id').value = s.id;
-            document.getElementById('f-date').value = s.date;
-            document.getElementById('f-time').value = s.time;
-            document.getElementById('f-loc').value = s.location;
-            document.getElementById('f-cap').value = s.capacity;
-            document.getElementById('f-fee').value = s.fee;
-            document.getElementById('f-notes').value = s.admin_notes || '';
-            document.getElementById('f-visible').checked = s.is_visible !== false;
+            if (s) {
+                document.getElementById('edit-id').value = s.id;
+                document.getElementById('f-date').value = s.date;
+                document.getElementById('f-time').value = s.time;
+                document.getElementById('f-loc').value = s.location;
+                document.getElementById('f-cap').value = s.capacity;
+                document.getElementById('f-fee').value = s.fee;
+                // Handle the new fields
+                document.getElementById('f-notes').value = s.admin_notes || '';
+                document.getElementById('f-visible').checked = s.is_visible !== false;
+                log(s.is_visible);
+                document.getElementById('editor-title').innerText = "Edit Session";
+            }
         } else {
+            // Clear fields for a new session
             document.getElementById('edit-id').value = "";
             document.getElementById('f-visible').checked = true;
-            ['f-date', 'f-time', 'f-loc', 'f-cap', 'f-fee'].forEach(i => document.getElementById(i).value = "");
+            document.getElementById('editor-title').innerText = "New Session";
+            ['f-date', 'f-time', 'f-loc', 'f-cap', 'f-fee', 'f-notes'].forEach(i => {
+                document.getElementById(i).value = "";
+            });
         }
     }
 

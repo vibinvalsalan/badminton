@@ -132,15 +132,13 @@
                         </div>
                     </div>
 
-                    <div class="flex items-center justify-between bg-blue-50 p-4 rounded-2xl border border-blue-100">
-                        <div>
-                            <p class="text-[11px] font-black text-blue-900 uppercase">Visible to Players</p>
-                            <p class="text-[9px] text-blue-600 font-medium">Turn off to save as a draft</p>
-                        </div>
-                        <label class="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" id="f-visible" class="sr-only peer">
-                            <div class="w-11 h-6 bg-gray-300 rounded-full peer peer-checked:bg-blue-600 peer-focus:ring-4 peer-focus:ring-blue-100 transition-all after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
-                        </label>
+                    <div class="mb-4">
+                        <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Session Visibility</label>
+                        <select id="f-visible" class="w-full bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm font-bold">
+                            <option value="true">Public (Visible to Players)</option>
+                            <option value="false">Private (Hidden / Draft)</option>
+                        </select>
+                        <p class="text-[9px] text-gray-400 mt-1 ml-1">Private sessions are only visible in the Admin Dashboard.</p>
                     </div>
 
                     <div>
@@ -985,7 +983,7 @@
     }
 
 
-    function showSessionForm(id = null) {
+    function showSessionForm_delete(id = null) {
         hideAdminSubpages(); 
         const editor = document.getElementById('admin-editor');
         editor.classList.remove('hidden'); // Show editor first
@@ -1019,7 +1017,38 @@
         }
     }
 
+    function showSessionForm(id = null) {
+        hideAdminSubpages(); 
+        document.getElementById('admin-editor').classList.remove('hidden');
+        
+        const visibleSelect = document.getElementById('f-visible');
 
+        if (id) {
+            const s = allData.find(x => x.id === id);
+            if (s) {
+                document.getElementById('edit-id').value = s.id;
+                document.getElementById('f-date').value = s.date;
+                document.getElementById('f-time').value = s.time;
+                document.getElementById('f-loc').value = s.location;
+                document.getElementById('f-cap').value = s.capacity;
+                document.getElementById('f-fee').value = s.fee;
+                document.getElementById('f-notes').value = s.admin_notes || '';
+                
+                // Set the dropdown to match the DB value
+                // We convert the boolean to a string to match the <option> value
+                visibleSelect.value = (s.is_visible !== false) ? "true" : "false"; 
+                
+                document.getElementById('editor-title').innerText = "Edit Session";
+            }
+        } else {
+            document.getElementById('edit-id').value = "";
+            visibleSelect.value = "true"; // Default to Public for new sessions
+            document.getElementById('editor-title').innerText = "New Session";
+            ['f-date', 'f-time', 'f-loc', 'f-cap', 'f-fee', 'f-notes'].forEach(i => {
+                document.getElementById(i).value = "";
+            });
+        }
+    }
 
 
     function closeEditor() { hideAdminSubpages(); document.getElementById('admin-active-list').classList.remove('hidden'); }
@@ -1027,7 +1056,10 @@
 
     async function saveSession() {
         const sessionId = document.getElementById('edit-id').value;
-        const isVisible = document.getElementById('f-visible').checked;
+        
+        // Convert the string from the dropdown into a real Boolean
+        const isVisibleValue = document.getElementById('f-visible').value === "true";
+
         const sData = { 
             date: document.getElementById('f-date').value, 
             time: document.getElementById('f-time').value, 
@@ -1035,7 +1067,7 @@
             capacity: parseInt(document.getElementById('f-cap').value), 
             fee: document.getElementById('f-fee').value,
             admin_notes: document.getElementById('f-notes').value,
-            is_visible: isVisible 
+            is_visible: isVisibleValue 
         };
 
         let result;

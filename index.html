@@ -121,14 +121,22 @@
                         <input type="text" id="f-loc" class="w-full bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all">
                     </div>
 
-                    <div class="flex gap-4">
-                        <div class="w-1/2">
-                            <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Capacity</label>
-                            <input type="number" id="f-cap" class="w-full bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                    <div class="grid grid-cols-1 gap-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Capacity</label>
+                                <input type="number" id="f-cap" class="w-full bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                            </div>
+                            <div>
+                                <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Fee</label>
+                                <input type="text" id="f-fee" class="w-full bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                            </div>
                         </div>
-                        <div class="w-1/2">
-                            <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Fee</label>
-                            <input type="text" id="f-fee" class="w-full bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                        <div>
+                            <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Payment Details (WhatsApp)</label>
+                            <textarea id="f-payment-method" rows="2" 
+                                placeholder="e.g. Bank: Monzo | Acc: 12345678" 
+                                class="w-full bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"></textarea>
                         </div>
                     </div>
 
@@ -660,7 +668,7 @@
         if (!s) return;
         const pList = s.players.map((p, i) => `${i + 1}. ${p.player_name}${p.payment_status === 'Paid' ? ' *Paid*' : ''}`).join('\n');
         const wList = s.waitlist.length > 0 ? `\n\n*Waitlist:*\n${s.waitlist.map((p, i) => `W${i+1}. ${p.player_name}`).join('\n')}` : '';
-        const msg = `🏸 *BADMINTON*\n📅 *Date:* ${formatDateWithDay(s.date)}\n⏰ *Time:* ${s.time}\n📍 *Loc:* ${s.location}\n💰 *Fee:* ${s.fee}\n\n*Confirmed:*\n${pList || '_None_'}${wList}`;
+        const msg = `🏸 *BADMINTON*\n📅 *Date:* ${formatDateWithDay(s.date)}\n⏰ *Time:* ${s.time}\n📍 *Loc:* ${s.location}\n💰 *Fee:* ${s.fee}\n🏦 *Pay to:* ${s.payment_method || 'Contact Admin'}\n\n*Confirmed:*\n${pList || '_None_'}${wList}`;
         navigator.clipboard.writeText(msg).then(() => Swal.fire({ toast: true, position: 'top', icon: 'success', title: 'Copied to clipboard!', showConfirmButton: false, timer: 1500 }));
     }
 
@@ -983,40 +991,6 @@
     }
 
 
-    function showSessionForm_delete(id = null) {
-        hideAdminSubpages(); 
-        const editor = document.getElementById('admin-editor');
-        editor.classList.remove('hidden'); // Show editor first
-        
-        const visibleToggle = document.getElementById('f-visible');
-        
-        if (id) {
-            const s = allData.find(x => x.id === id);
-            if (s) {
-                document.getElementById('edit-id').value = s.id;
-                document.getElementById('f-date').value = s.date;
-                document.getElementById('f-time').value = s.time;
-                document.getElementById('f-loc').value = s.location;
-                document.getElementById('f-cap').value = s.capacity;
-                document.getElementById('f-fee').value = s.fee;
-                document.getElementById('f-notes').value = s.admin_notes || '';
-                
-                // FIX: Explicitly set boolean. If s.is_visible is null/undefined, default to true.
-                visibleToggle.checked = (s.is_visible !== false);
-                
-                document.getElementById('editor-title').innerText = "Edit Session";
-            }
-        } else {
-            // Reset for NEW session
-            document.getElementById('edit-id').value = "";
-            visibleToggle.checked = true;
-            document.getElementById('editor-title').innerText = "New Session";
-            ['f-date', 'f-time', 'f-loc', 'f-cap', 'f-fee', 'f-notes'].forEach(i => {
-                document.getElementById(i).value = "";
-            });
-        }
-    }
-
     function showSessionForm(id = null) {
         hideAdminSubpages(); 
         document.getElementById('admin-editor').classList.remove('hidden');
@@ -1033,6 +1007,7 @@
                 document.getElementById('f-cap').value = s.capacity;
                 document.getElementById('f-fee').value = s.fee;
                 document.getElementById('f-notes').value = s.admin_notes || '';
+                document.getElementById('f-payment-method').value = s.payment_method || '';
                 
                 // Set the dropdown to match the DB value
                 // We convert the boolean to a string to match the <option> value
@@ -1067,7 +1042,8 @@
             capacity: parseInt(document.getElementById('f-cap').value), 
             fee: document.getElementById('f-fee').value,
             admin_notes: document.getElementById('f-notes').value,
-            is_visible: isVisibleValue 
+            is_visible: isVisibleValue,
+            payment_method: document.getElementById('f-payment-method').value 
         };
 
         let result;

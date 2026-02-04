@@ -526,7 +526,7 @@
                         </li>
                         <li class="flex gap-2">
                             <span class="font-bold">4.</span> 
-                            <span><strong>Unable to join the session?</strong> Click the <strong class="text-red-500">✕</strong> icon on the far right of your name.</span>
+                            <span><strong>Unable to attend the session?</strong> Click the <strong class="text-red-500">✕</strong> icon on the far right of your name.</span>
                         </li>
                     </ul>
                 </div>
@@ -567,12 +567,18 @@
                 ${s.waitlist.length > 0 ? `
                     <p class="text-[10px] font-black text-gray-400 uppercase pt-6 mb-3">Waitlist</p>
                     ${s.waitlist.map(p => `
-                        <div class="flex justify-between items-center p-3 bg-gray-50 rounded-xl italic">
-                            <span class="text-gray-500 text-sm">${p.player_name}</span>
-                            <button onclick="handleRemoval('${p.id}', '${s.id}', '${p.player_name}')" 
-                                class="text-red-200 hover:text-red-400 transition-colors pl-4 border-l border-gray-200">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                            </button>
+                        <div class="flex justify-between items-center p-3 bg-gray-50 rounded-xl mb-2">
+                            <span class="text-gray-500 text-sm italic">${p.player_name}</span>
+                            <div class="flex items-center gap-2">
+                                <button onclick="promoteFromWaitlist('${p.id}', '${s.id}', '${p.player_name}')" 
+                                    class="text-[9px] px-2 py-1.5 rounded-lg font-black bg-blue-100 text-blue-700 uppercase hover:bg-blue-200 transition-colors">
+                                    Promote
+                                </button>
+                                <button onclick="handleRemoval('${p.id}', '${s.id}', '${p.player_name}')" 
+                                    class="text-red-200 hover:text-red-400 transition-colors pl-2 border-l border-gray-200">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                </button>
+                            </div>
                         </div>
                     `).join('')}
                 ` : ''}
@@ -623,6 +629,52 @@ function filterPlayers(status) {
         container.innerHTML = filtered.map(p => renderPlayerRow(p, s)).join('');
     }
 }
+
+
+async function promoteFromWaitlist(regId, sid, name) {
+    const session = allData.find(s => s.id === sid);
+    const spotsLeft = session.capacity - session.players.length;
+
+    // 1. Check if a spot is actually available
+    if (spotsLeft <= 0) {
+        Swal.fire({
+            title: 'No Slots Available',
+            text: `The session is full (${session.capacity}/${session.capacity}). You must remove someone from the confirmed list first.`,
+            icon: 'error',
+            confirmButtonColor: '#2563eb',
+            customClass: { popup: 'rounded-3xl' }
+        });
+        return;
+    }
+
+    // 2. Perform the update in Supabase
+    const { error } = await _supabase
+        .from('registrations')
+        .update({ status: 'Confirmed' })
+        .eq('id', regId);
+
+    if (!error) {
+        // 3. Log the action
+        const adminStr = isAdmin ? `${adminName} promoted` : `System promoted`;
+        await logAction('PLAYER_PROMOTED', `${adminStr} ${name} to confirmed list for ${session.date}`, name, sid);
+        
+        // 4. Success feedback and reload
+        Swal.fire({
+            toast: true,
+            position: 'top',
+            icon: 'success',
+            title: `${name} promoted to confirmed list!`,
+            showConfirmButton: false,
+            timer: 2000
+        });
+        loadData();
+    } else {
+        Swal.fire('Error', 'Could not promote player. Please try again.', 'error');
+    }
+}
+
+
+
 
 // Helper to generate the HTML for a single player row
 function renderPlayerRow(p, s) {

@@ -226,6 +226,7 @@
         // 1. Check if we already logged this specific browser tab session
         if (sessionStorage.getItem('access_logged')) return;
 
+        
         // 2. Generate a random Unique ID for this visit
         const accessId = 'ACC-' + Math.random().toString(36).substr(2, 9).toUpperCase();
         
@@ -526,7 +527,7 @@
                         </li>
                         <li class="flex gap-2">
                             <span class="font-bold">4.</span> 
-                            <span><strong>Unable to attend the session?</strong> Click the <strong class="text-red-500">✕</strong> icon on the far right of your name.</span>
+                            <span><strong>Unable to attend the session?</strong> Click the <strong class="text-red-500">✕</strong> icon on the far right of your name to leave the session.</span>
                         </li>
                     </ul>
                 </div>

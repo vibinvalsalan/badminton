@@ -551,68 +551,108 @@
 
 
 
+<div class="flex justify-between items-center mb-3">
+                    <p class="text-[10px] font-black text-gray-400 uppercase">Participants</p>
+                    <div class="flex bg-gray-100 p-1 rounded-lg gap-1">
+                        <button onclick="filterPlayers('all')" id="btn-filter-all" class="text-[9px] font-bold px-2 py-1 rounded-md bg-white shadow-sm transition-all">All</button>
+                        <button onclick="filterPlayers('Paid')" id="btn-filter-paid" class="text-[9px] font-bold px-2 py-1 rounded-md text-gray-500 transition-all">Paid</button>
+                        <button onclick="filterPlayers('Unpaid')" id="btn-filter-unpaid" class="text-[9px] font-bold px-2 py-1 rounded-md text-gray-500 transition-all">Unpaid</button>
+                    </div>
+                </div>
 
-
-                    <p class="text-[10px] font-black text-gray-400 uppercase mb-3">Participants</p>
-                    ${s.players.map(p => `
-                        <div class="group flex justify-between items-center p-3 rounded-xl hover:bg-gray-50 transition-colors border border-transparent">
-                            <span class="font-semibold text-gray-700">${p.player_name}</span>
-                            <div class="flex items-center gap-4">
-                                
-                                ${p.payment_status === 'Paid' ? `
-                                    <button onclick="handlePayment('${p.id}', '${p.payment_status}')" 
-                                        class="flex items-center gap-1 text-[10px] px-3 py-1.5 rounded-lg font-black bg-green-100 text-green-700 border border-green-200 uppercase">
-                                        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
-                                        Paid
-                                    </button>
-                                ` : `
-                                    <button onclick="handlePayment('${p.id}', '${p.payment_status}')" 
-                                        class="text-[10px] px-3 py-1.5 rounded-lg font-black bg-blue-600 text-white shadow-sm uppercase tracking-tighter">
-                                        Mark Paid
-                                    </button>
-                                `}
-                                
-                                    <button onclick="handleRemoval('${p.id}', '${s.id}', '${p.player_name}')" 
-                                        class="text-gray-300 hover:text-red-500 transition-all p-2 ml-2 rounded-full hover:bg-red-50"
-                                        title="Remove Player">
-                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                                        </svg>
-                                    </button>
-                            </div>
+                <div id="participants-list-container">
+                    ${s.players.map(p => renderPlayerRow(p, s)).join('')}
+                </div>
+                
+                ${s.waitlist.length > 0 ? `
+                    <p class="text-[10px] font-black text-gray-400 uppercase pt-6 mb-3">Waitlist</p>
+                    ${s.waitlist.map(p => `
+                        <div class="flex justify-between items-center p-3 bg-gray-50 rounded-xl italic">
+                            <span class="text-gray-500 text-sm">${p.player_name}</span>
+                            <button onclick="handleRemoval('${p.id}', '${s.id}', '${p.player_name}')" 
+                                class="text-red-200 hover:text-red-400 transition-colors pl-4 border-l border-gray-200">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                            </button>
                         </div>
                     `).join('')}
-                    
-                    
-                    ${s.waitlist.length > 0 ? `
-                        <p class="text-[10px] font-black text-gray-400 uppercase pt-6 mb-3">Waitlist</p>
-                        ${s.waitlist.map(p => `
-                            <div class="flex justify-between items-center p-3 bg-gray-50 rounded-xl italic">
-                                <span class="text-gray-500 text-sm">${p.player_name}</span>
-                                <button onclick="handleRemoval('${p.id}', '${s.id}', '${p.player_name}')" 
-                                    class="text-red-200 hover:text-red-400 transition-colors pl-4 border-l border-gray-200">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                                </button>
-                            </div>
-                        `).join('')}
-                    ` : ''}
+                ` : ''}
 
-                    ${isAdmin ? `
-                    <div class="mt-8 pt-6 border-t border-gray-100">
-                        <button onclick="toggleSessionLogs('${s.id}')" 
-                            class="w-full flex justify-between items-center text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-blue-600 transition-colors">
-                            <span>Session Audit Log (Admin Only)</span>
-                            <span id="log-chevron-${s.id}">+ Show</span>
-                        </button>
-                        <div id="session-log-container-${s.id}" class="hidden mt-4 space-y-2 max-h-60 overflow-y-auto pr-2">
-                            <p class="text-center text-[10px] text-gray-400 italic py-4">Loading logs...</p>
-                        </div>
+                ${isAdmin ? `
+                <div class="mt-8 pt-6 border-t border-gray-100">
+                    <button onclick="toggleSessionLogs('${s.id}')" 
+                        class="w-full flex justify-between items-center text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-blue-600 transition-colors">
+                        <span>Session Audit Log (Admin Only)</span>
+                        <span id="log-chevron-${s.id}">+ Show</span>
+                    </button>
+                    <div id="session-log-container-${s.id}" class="hidden mt-4 space-y-2 max-h-60 overflow-y-auto pr-2">
+                        <p class="text-center text-[10px] text-gray-400 italic py-4">Loading logs...</p>
                     </div>
-                    ` : ''}
-
                 </div>
-            </div>`;
+                ` : ''}
+            </div>
+        </div>`;
+}
+
+                    
+function filterPlayers(status) {
+    const s = allData.find(x => x.id === currentSessionId);
+    if (!s) return;
+
+    // 1. Update Button Visual State
+    const types = ['all', 'paid', 'unpaid'];
+    types.forEach(type => {
+        const btn = document.getElementById(`btn-filter-${type}`);
+        if (!btn) return;
+        if (type === status.toLowerCase()) {
+            btn.classList.add('bg-white', 'shadow-sm');
+            btn.classList.remove('text-gray-500');
+        } else {
+            btn.classList.remove('bg-white', 'shadow-sm');
+            btn.classList.add('text-gray-500');
+        }
+    });
+
+    // 2. Filter logic
+    const filtered = status === 'all' 
+        ? s.players 
+        : s.players.filter(p => p.payment_status === status);
+
+    // 3. Update the container
+    const container = document.getElementById('participants-list-container');
+    if (container) {
+        container.innerHTML = filtered.map(p => renderPlayerRow(p, s)).join('');
     }
+}
+
+// Helper to generate the HTML for a single player row
+function renderPlayerRow(p, s) {
+    return `
+        <div class="group flex justify-between items-center p-3 rounded-xl hover:bg-gray-50 transition-colors border border-transparent">
+            <span class="font-semibold text-gray-700">${p.player_name}</span>
+            <div class="flex items-center gap-4">
+                ${p.payment_status === 'Paid' ? `
+                    <button onclick="handlePayment('${p.id}', '${p.payment_status}')" 
+                        class="flex items-center gap-1 text-[10px] px-3 py-1.5 rounded-lg font-black bg-green-100 text-green-700 border border-green-200 uppercase">
+                        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
+                        Paid
+                    </button>
+                ` : `
+                    <button onclick="handlePayment('${p.id}', '${p.payment_status}')" 
+                        class="text-[10px] px-3 py-1.5 rounded-lg font-black bg-blue-600 text-white shadow-sm uppercase tracking-tighter">
+                        Mark Paid
+                    </button>
+                `}
+                <button onclick="handleRemoval('${p.id}', '${s.id}', '${p.player_name}')" 
+                    class="text-gray-300 hover:text-red-500 transition-all p-2 ml-2 rounded-full hover:bg-red-50">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>`;
+}                    
+                    
+
 
 
     async function toggleSessionLogs(sid) {

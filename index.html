@@ -340,10 +340,11 @@
             </div>`).join('') || '<p class="text-center text-gray-400 italic">No logs found</p>';
     }    
 
-    async function loadData() {
+    async function loadData_Delete() {
         const { data: sData } = await _supabase
             .from('sessions')
             .select('*, registrations(*)')
+            .eq('is_deleted', false) // Only fetch sessions that are NOT deleted
             // This ensures the DB returns registrations in the order they joined (by creation time)
             .order('created_at', { foreignTable: 'registrations', ascending: true });
         const { data: pData } = await _supabase.from('players').select('*').order('name');
@@ -353,6 +354,39 @@
             players: s.registrations.filter(r => r.status === 'Confirmed'),
             waitlist: s.registrations.filter(r => r.status === 'Waitlist')
         }));
+        renderSessions();
+        if (currentSessionId) renderDetailPage();
+        if (isAdmin) renderAdminLists();
+    }    
+
+
+
+    async function loadData() {
+        // 1. Fetch sessions that are not deleted + their registrations
+        const { data: sData, error } = await _supabase
+            .from('sessions')
+            .select('*, registrations(*)')
+            .eq('is_deleted', false) 
+            // Order the registrations by join time
+            .order('created_at', { foreignTable: 'registrations', ascending: true });
+
+        if (error) {
+            console.error("Fetch error:", error);
+            return;
+        }
+
+        // 2. Fetch master player list
+        const { data: pData } = await _supabase.from('players').select('*').order('name');
+        masterPlayers = pData || [];
+        // 3. Map the data into our local state
+        allData = (sData || []).map(s => ({
+            ...s,
+            // Ensure registrations exists before filtering to prevent crashes
+            players: (s.registrations || []).filter(r => r.status === 'Confirmed'),
+            waitlist: (s.registrations || []).filter(r => r.status === 'Waitlist')
+        }));
+
+        // 4. Update the UI
         renderSessions();
         if (currentSessionId) renderDetailPage();
         if (isAdmin) renderAdminLists();
@@ -1158,6 +1192,7 @@ function renderPlayerRow(p, s) {
             is_visible: isVisibleValue,
             payment_method: document.getElementById('f-payment-method').value ,
             special_instruction: document.getElementById('f-instruction').value, // Add this line
+            is_deleted: false // Explicitly set for SQL filtering
         };
 
         let result;
@@ -1199,10 +1234,43 @@ function renderPlayerRow(p, s) {
 
 
 
-    async function deleteSession(id) {
+    async function deleteSession_delete(id) {
         const { isConfirmed } = await Swal.fire({ title: 'Delete?', icon: 'warning', showCancelButton: true });
         if (isConfirmed) { await _supabase.from('sessions').delete().eq('id', id); loadData(); }
     }
+
+    async function deleteSession(id) {
+        const { isConfirmed } = await Swal.fire({
+            title: 'Delete Session?',
+            text: "This will hide the session from everyone. You can still recover it from the archive later.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#ef4444',
+            cancelButtonColor: '#6b7280',
+            confirmButtonText: 'Yes, delete it',
+            customClass: { popup: 'rounded-3xl' }
+        });
+
+        if (isConfirmed) {
+            // SOFT DELETE: Update the flag instead of removing the row
+            const { error } = await _supabase
+                .from('sessions')
+                .update({ is_deleted: true })
+                .eq('id', id);
+        // Get admin name from state or localStorage
+        const currentAdmin = adminName || localStorage.getItem('adminName') || 'Admin';
+            if (!error) {
+                // Log the action for your audit history
+                await logAction('SESSION_DELETED', `${adminName} deleted session ID: ${id}`, 'System', id);
+                
+                Swal.fire({ toast: true, position: 'top', icon: 'success', title: 'Session deleted', showConfirmButton: false, timer: 1500 });
+                loadData();
+            } else {
+                Swal.fire('Error', 'Could not delete session.', 'error');
+            }
+        }
+    }
+
 
     window.onload = async () => {
         await logVisit();

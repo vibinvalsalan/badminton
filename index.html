@@ -763,7 +763,10 @@ function renderPlayerRow(p, s) {
         if (!s) return;
         const pList = s.players.map((p, i) => `${i + 1}. ${p.player_name}${p.payment_status === 'Paid' ? ' *Paid*' : ''}`).join('\n');
         const wList = s.waitlist.length > 0 ? `\n\n*Waitlist:*\n${s.waitlist.map((p, i) => `W${i+1}. ${p.player_name}`).join('\n')}` : '';
-        const msg = `🏸 *BADMINTON*\n📅 *Date:* ${formatDateWithDay(s.date)}\n⏰ *Time:* ${s.time}\n📍 *Loc:* ${s.location}\n💰 *Fee:* ${s.fee}\n🏦 *Pay to:* ${s.payment_method || 'Contact Admin'}\n\n*Confirmed:*\n${pList || '_None_'}${wList}`;
+        // Check if there's a special instruction
+            const instruction = s.special_instruction ? `\n⚠️ *Note:* ${s.special_instruction}` : '';
+
+        const msg = `🏸 *BADMINTON*\n📅 *Date:* ${formatDateWithDay(s.date)}\n⏰ *Time:* ${s.time}\n📍 *Loc:* ${s.location}\n💰 *Fee:* ${s.fee}\n🏦 *Pay to:* \n${s.payment_method || 'Contact Admin'}\n\n*Confirmed:*\n${pList || '_None_'}${wList}\n\n${instruction}`;
         navigator.clipboard.writeText(msg).then(() => Swal.fire({ toast: true, position: 'top', icon: 'success', title: 'Copied to clipboard!', showConfirmButton: false, timer: 1500 }));
     }
 
@@ -1103,6 +1106,7 @@ function renderPlayerRow(p, s) {
                 document.getElementById('f-fee').value = s.fee;
                 document.getElementById('f-notes').value = s.admin_notes || '';
                 document.getElementById('f-payment-method').value = s.payment_method || '';
+                document.getElementById('f-instruction').value = s.special_instruction || ''; // Add this line
                 
                 // Set the dropdown to match the DB value
                 // We convert the boolean to a string to match the <option> value
@@ -1114,7 +1118,7 @@ function renderPlayerRow(p, s) {
             document.getElementById('edit-id').value = "";
             visibleSelect.value = "true"; // Default to Public for new sessions
             document.getElementById('editor-title').innerText = "New Session";
-            ['f-date', 'f-time', 'f-loc', 'f-cap', 'f-fee', 'f-notes'].forEach(i => {
+            ['f-date', 'f-time', 'f-loc', 'f-cap', 'f-fee', 'f-notes','f-payment-method','f-instruction'].forEach(i => {
                 document.getElementById(i).value = "";
             });
         }
@@ -1138,7 +1142,8 @@ function renderPlayerRow(p, s) {
             fee: document.getElementById('f-fee').value,
             admin_notes: document.getElementById('f-notes').value,
             is_visible: isVisibleValue,
-            payment_method: document.getElementById('f-payment-method').value 
+            payment_method: document.getElementById('f-payment-method').value ,
+            special_instruction: document.getElementById('f-instruction').value, // Add this line
         };
 
         let result;

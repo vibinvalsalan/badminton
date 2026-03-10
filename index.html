@@ -1036,9 +1036,11 @@ function renderPlayerRow(p, s) {
 
         if (result.isConfirmed) {
             const session = allData.find(s => s.id === sid);
+            const performer = isAdmin ? adminName : "User";
             const logDetails = session 
-                ? `${adminName} Removed ${name} from session on ${session.date} (${session.time})`
-                : `${adminName} ${name} from session ID: ${sid}`;
+                ? `${performer} removed ${name} from session on ${session.date} (${session.time})`
+                : `${performer} removed ${name} from session ID: ${sid}`;
+
 
             const { error } = await _supabase.from('registrations').delete().eq('id', regId);
 

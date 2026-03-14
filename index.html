@@ -380,24 +380,7 @@
             </div>`).join('') || '<p class="text-center text-gray-400 italic">No logs found</p>';
     }    
 
-    async function loadData_Delete() {
-        const { data: sData } = await _supabase
-            .from('sessions')
-            .select('*, registrations(*)')
-            .eq('is_deleted', false) // Only fetch sessions that are NOT deleted
-            // This ensures the DB returns registrations in the order they joined (by creation time)
-            .order('created_at', { foreignTable: 'registrations', ascending: true });
-        const { data: pData } = await _supabase.from('players').select('*').order('name');
-        masterPlayers = pData || [];
-        allData = (sData || []).map(s => ({
-            ...s,
-            players: s.registrations.filter(r => r.status === 'Confirmed'),
-            waitlist: s.registrations.filter(r => r.status === 'Waitlist')
-        }));
-        renderSessions();
-        if (currentSessionId) renderDetailPage();
-        if (isAdmin) renderAdminLists();
-    }    
+
 
 
 
@@ -435,18 +418,14 @@
 
     async function renderPlayerStats() {
         hideAllViews();
-        
-        // UI Setup
         document.getElementById('view-stats').classList.remove('hidden');
         document.getElementById('back-btn').classList.remove('hidden');
         document.getElementById('nav-title').innerText = "Player Participation";
-        document.getElementById('admin-nav-btn').classList.add('hidden');
 
         const statsList = document.getElementById('stats-list');
-        statsList.innerHTML = `<div class="p-8 text-center text-gray-400 animate-pulse font-bold uppercase text-[10px]">Loading Stats...</div>`;
+        statsList.innerHTML = `<div class="p-8 text-center text-gray-400 font-bold uppercase text-[10px]">Loading...</div>`;
 
         try {
-            // 1. Fetch directly from the new Database View
             const { data, error } = await _supabase
                 .from('player_participation_stats')
                 .select('*')
@@ -454,34 +433,74 @@
 
             if (error) throw error;
 
-            // 2. Handle empty state
-            if (!data || data.length === 0) {
-                statsList.innerHTML = `
-                    <div class="p-12 text-center">
-                        <p class="text-gray-400 text-sm font-medium">No completed sessions found.</p>
-                        <p class="text-[10px] text-gray-300 uppercase mt-1">Mark a session as "Completed" to see stats.</p>
-                    </div>`;
-                return;
-            }
-
-            // 3. Render the list
+            // Note the change: added onclick and cursor-pointer to the row
             statsList.innerHTML = data.map(s => `
-                <div class="flex items-center justify-between p-5 border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                <div onclick="showPlayerHistory('${s.player_id}', '${s.player_name}')" 
+                    class="flex items-center justify-between p-5 border-b border-gray-50 hover:bg-blue-50 transition-all cursor-pointer group">
                     <div class="flex flex-col">
-                        <span class="font-bold text-gray-800">${s.player_name}</span>
-                        <span class="text-[9px] text-gray-400 uppercase font-black">Member</span>
+                        <span class="font-bold text-gray-800 group-hover:text-blue-600">${s.player_name}</span>
+                        <span class="text-[9px] text-gray-400 uppercase font-black tracking-widest">Click for history</span>
                     </div>
-                    <div class="flex items-center bg-blue-50 px-4 py-2 rounded-2xl border border-blue-100">
-                        <span class="text-sm font-black text-blue-600 mr-1">${s.games_played}</span>
-                        <span class="text-[10px] font-black text-blue-400 uppercase">Games</span>
+                    <div class="flex items-center bg-blue-50 px-4 py-2 rounded-2xl border border-blue-100 group-hover:bg-blue-600 group-hover:border-blue-600 transition-colors">
+                        <span class="text-sm font-black text-blue-600 mr-1 group-hover:text-white">${s.games_played}</span>
+                        <span class="text-[10px] font-black text-blue-400 uppercase group-hover:text-blue-100">Games</span>
                     </div>
                 </div>
             `).join('');
 
         } catch (err) {
-            console.error("View Fetch Error:", err);
-            statsList.innerHTML = `<div class="p-8 text-center text-red-500 font-bold">Error loading database view.</div>`;
+            console.error("Stats Error:", err);
+            statsList.innerHTML = `<div class="p-8 text-center text-red-500 font-bold">Error loading stats</div>`;
         }
+    }
+
+    // NEW FUNCTION: Show the breakdown in a SweetAlert modal
+    async function showPlayerHistory(playerId, playerName) {
+        // Show a loading state inside the modal
+        Swal.fire({
+            title: playerName,
+            html: '<p class="text-xs text-gray-400 uppercase font-black mb-4">Loading Session History...</p><div id="history-loader" class="space-y-2"></div>',
+            showConfirmButton: false,
+            customClass: { popup: 'rounded-3xl' },
+            didOpen: async () => {
+                Swal.showLoading();
+                
+                const { data, error } = await _supabase
+                    .from('player_session_history')
+                    .select('*')
+                    .eq('player_id', playerId)
+                    .order('session_date', { ascending: false });
+
+                if (error || !data) {
+                    Swal.fire('Error', 'Could not load history', 'error');
+                    return;
+                }
+
+                const historyHtml = data.map(h => `
+                    <div class="flex justify-between items-center p-3 bg-gray-50 rounded-xl mb-2 text-left border border-gray-100">
+                        <div>
+                            <p class="text-[10px] font-black text-blue-600 uppercase leading-none">${formatDateWithDay(h.session_date)}</p>
+                            <p class="font-bold text-gray-800 text-sm mt-1">${h.session_time}</p>
+                        </div>
+                        <span class="text-[9px] font-bold text-gray-400 uppercase text-right max-w-[100px] truncate">${h.session_location}</span>
+                    </div>
+                `).join('') || '<p class="text-gray-400 italic py-4">No completed sessions found.</p>';
+
+                Swal.update({
+                    title: playerName,
+                    html: `
+                        <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Attendance Breakdown</p>
+                        <div class="max-h-[400px] overflow-y-auto pr-1">
+                            ${historyHtml}
+                        </div>
+                    `,
+                    showConfirmButton: true,
+                    confirmButtonText: 'Close',
+                    confirmButtonColor: '#2563eb'
+                });
+                Swal.hideLoading();
+            }
+        });
     }
 
 

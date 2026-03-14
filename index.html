@@ -131,6 +131,14 @@
                                 <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Fee</label>
                                 <input type="text" id="f-fee" class="w-full bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all">
                             </div>
+                            <div class="mt-4">
+                                <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Session Status</label>
+                                <select id="f-status" class="w-full bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold">
+                                    <option value="Scheduled">Scheduled</option>
+                                    <option value="Completed">Completed</option>
+                                    <option value="Cancelled">Cancelled</option>
+                                </select>
+                            </div>
                         </div>
                         <div>
                             <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Payment Details (WhatsApp)</label>
@@ -414,6 +422,13 @@
             const waitlistCount = s.waitlist ? s.waitlist.length : 0;
             const paidCount = s.players.filter(p => p.payment_status === 'Paid').length;
             
+            const statusBadge = s.status === 'Cancelled' 
+                ? `<span class="bg-red-100 text-red-600 px-2 py-1 rounded-md text-[10px] font-bold">CANCELLED</span>`
+                : s.status === 'Completed'
+                    ? `<span class="bg-gray-100 text-gray-600 px-2 py-1 rounded-md text-[10px] font-bold">COMPLETED</span>`
+                    : '';
+
+
             const card = document.createElement('div');
             card.className = "bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex items-center gap-4 cursor-pointer hover:shadow-md transition-all active:scale-[0.98] mb-3";
             card.onclick = () => showDetail(s.id);
@@ -427,7 +442,7 @@
                     <div class="flex justify-between items-start mb-1">
                         <div>
                             <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest">${formatDateWithDay(s.date)}</p>
-                            <h3 class="text-lg font-black text-gray-900 leading-tight">${s.time}</h3>
+                            <h3 class="text-lg font-black text-gray-900 leading-tight">${s.time}</h3>${statusBadge}
                         </div>
                         <span class="text-[9px] font-black px-2 py-1 rounded-full uppercase ${spotsLeft > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}">
                             ${spotsLeft > 0 ? spotsLeft + ' Left' : 'Full'}
@@ -439,6 +454,8 @@
                         <p class="text-xs text-gray-400 truncate">${s.location}</p>
                     </div>
 
+                    
+
                     <div class="flex items-center gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-tight">
                         <span>FEE: <span class="${s.fee.toLowerCase() === 'tbc' ? 'text-yellow-600' : 'text-blue-600'}">${s.fee}</span></span>
                         <span class="text-gray-200">•</span>
@@ -446,6 +463,7 @@
                         <span class="text-gray-200">•</span>
                         <span>PAID: <span class="text-gray-600">${paidCount}/${s.players.length}</span></span>
                     </div>
+                    
 
                     ${waitlistCount > 0 ? `
                         <div class="mt-2 flex items-center gap-1">
@@ -1157,7 +1175,7 @@ function renderPlayerRow(p, s) {
                 document.getElementById('f-notes').value = s.admin_notes || '';
                 document.getElementById('f-payment-method').value = s.payment_method || '';
                 document.getElementById('f-instruction').value = s.special_instruction || ''; // Add this line
-                
+                document.getElementById('f-status').value = s.status || 'Scheduled';
                 // Set the dropdown to match the DB value
                 // We convert the boolean to a string to match the <option> value
                 visibleSelect.value = (s.is_visible !== false) ? "true" : "false"; 
@@ -1194,6 +1212,7 @@ function renderPlayerRow(p, s) {
             is_visible: isVisibleValue,
             payment_method: document.getElementById('f-payment-method').value ,
             special_instruction: document.getElementById('f-instruction').value, // Add this line
+            status: document.getElementById('f-status').value,
             is_deleted: false // Explicitly set for SQL filtering
         };
 

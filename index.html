@@ -44,33 +44,42 @@
                     <h2 class="text-2xl font-black">Admin Menu</h2>
                     <span id="admin-display-name" class="text-[10px] font-bold uppercase tracking-widest text-blue-200"></span>
                     <button onclick="logoutAdmin()" class="text-red-500 text-[10px] font-black uppercase bg-red-50 px-3 py-2 rounded-lg">Logout</button>
-                </div>
-                
-                <div class="grid grid-cols-1 gap-3">
-                    <button onclick="showActiveSessions()" class="w-full bg-white border border-gray-100 p-6 rounded-3xl shadow-sm text-left flex justify-between items-center">
-                        <div><h3 class="font-black text-gray-800">Manage Active Sessions</h3><p class="text-[10px] text-gray-400 uppercase font-bold">Upcoming games</p></div>
-                        <span class="text-blue-600">→</span>
-                    </button>
-                    <button onclick="showPastSessions()" class="w-full bg-white border border-gray-100 p-6 rounded-3xl shadow-sm text-left flex justify-between items-center">
-                        <div><h3 class="font-black text-gray-800">Manage Past Sessions</h3><p class="text-[10px] text-gray-400 uppercase font-bold">History & Payments</p></div>
-                        <span class="text-blue-600">→</span>
-                    </button>
-                    <button onclick="showPlayerManager()" class="w-full bg-white border border-gray-100 p-6 rounded-3xl shadow-sm text-left flex justify-between items-center">
-                        <div><h3 class="font-black text-gray-800">Manage Player List</h3><p class="text-[10px] text-gray-400 uppercase font-bold">Edit master names</p></div>
-                        <span class="text-blue-600">→</span>
-                    </button>
-                    <button onclick="showAuditHistory()" class="w-full bg-white border border-gray-100 p-6 rounded-3xl shadow-sm text-left flex justify-between items-center">
-                        <div><h3 class="font-black text-gray-800">View Audit History</h3><p class="text-[10px] text-gray-400 uppercase font-bold">System logs</p></div>
-                        <span class="text-blue-600">→</span>
-                    </button>
-                    <button onclick="renderPlayerStats()" class="flex items-center justify-between w-full p-4 bg-white border border-gray-100 rounded-2xl mb-3 shadow-sm active:scale-95 transition-transform">
-                        <div class="flex items-center">
-                            <span class="text-xl mr-3">👤</span>
-                            <div class="text-left">
-                                <p class="font-bold text-gray-800 leading-none">Player Stats</p>
-                                <p class="text-[10px] text-gray-400 uppercase mt-1 font-black">Attendance Tracking</p>
-                            </div>
+                </div>              
+                <div class="grid grid-cols-2 gap-3">
+                    <button onclick="showActiveSessions()" class="bg-white border border-gray-100 p-4 rounded-3xl shadow-sm text-left flex flex-col justify-between h-32">
+                        <span class="text-xl">🏸</span>
+                        <div>
+                            <h3 class="font-black text-gray-800 text-sm leading-tight">Active Sessions</h3>
+                            <p class="text-[9px] text-gray-400 uppercase font-bold">Upcoming</p>
                         </div>
+                    </button>
+
+                    <button onclick="showPastSessions()" class="bg-white border border-gray-100 p-4 rounded-3xl shadow-sm text-left flex flex-col justify-between h-32">
+                        <span class="text-xl">📅</span>
+                        <div>
+                            <h3 class="font-black text-gray-800 text-sm leading-tight">Past Sessions</h3>
+                            <p class="text-[9px] text-gray-400 uppercase font-bold">History</p>
+                        </div>
+                    </button>
+
+                    <button onclick="showPlayerManager()" class="bg-white border border-gray-100 p-4 rounded-3xl shadow-sm text-left flex flex-col justify-between h-32">
+                        <span class="text-xl">👥</span>
+                        <div>
+                            <h3 class="font-black text-gray-800 text-sm leading-tight">Player List</h3>
+                            <p class="text-[9px] text-gray-400 uppercase font-bold">Edit Names</p>
+                        </div>
+                    </button>
+
+                    <button onclick="renderPlayerStats()" class="bg-white border border-gray-100 p-4 rounded-3xl shadow-sm text-left flex flex-col justify-between h-32 border-blue-100 bg-blue-50/30">
+                        <span class="text-xl">📊</span>
+                        <div>
+                            <h3 class="font-black text-gray-800 text-sm leading-tight">Player Stats</h3>
+                            <p class="text-[9px] text-blue-500 uppercase font-bold">Participation</p>
+                        </div>
+                    </button>
+
+                    <button onclick="showAuditHistory()" class="col-span-2 bg-white border border-gray-100 p-4 rounded-3xl shadow-sm text-left flex justify-between items-center mt-2">
+                        <div><h3 class="font-black text-gray-800 text-sm">System Audit History</h3><p class="text-[9px] text-gray-400 uppercase font-bold">Logs</p></div>
                         <span class="text-gray-300">→</span>
                     </button>
                 </div>
@@ -427,36 +436,34 @@
 
     function renderPlayerStats() {
         hideAllViews();
+        
+        // Show the stats view
         document.getElementById('view-stats').classList.remove('hidden');
+        
+        // Set up Nav for Admin context
+        document.getElementById('back-btn').classList.remove('hidden');
+        document.getElementById('nav-title').innerText = "Player Participation";
+        document.getElementById('admin-nav-btn').classList.add('hidden');
 
         const statsList = document.getElementById('stats-list');
         
-        // 1. Calculate the counts
         const stats = masterPlayers.map(player => {
-            // We only count players in sessions that are 'Completed'
             const count = allData.filter(s => 
                 s.status === 'Completed' && 
-                s.players.some(p => p.player_id === player.id)
+                s.players.some(p => String(p.player_id) === String(player.id))
             ).length;
 
             return { name: player.name, count: count };
         });
 
-        // 2. Sort by name (A-Z) so it's easy for the Admin to find someone
-        stats.sort((a, b) => a.name.localeCompare(b.name));
-
-        // 3. Render the list
-        if (stats.length === 0) {
-            statsList.innerHTML = `<div class="p-8 text-center text-gray-400">No players found.</div>`;
-            return;
-        }
+        stats.sort((a, b) => b.count - a.count); // Sort by most active first
 
         statsList.innerHTML = stats.map(s => `
-            <div class="flex items-center justify-between p-4">
+            <div class="flex items-center justify-between p-4 border-b border-gray-50 hover:bg-gray-50 transition-colors">
                 <span class="font-bold text-gray-700">${s.name}</span>
-                <div class="flex items-center bg-gray-50 px-3 py-1 rounded-full border border-gray-100">
-                    <span class="text-xs font-black text-blue-600 mr-1">${s.count}</span>
-                    <span class="text-[9px] font-black text-gray-400 uppercase">Games</span>
+                <div class="flex items-center">
+                    <span class="text-sm font-black text-blue-600 mr-1">${s.count}</span>
+                    <span class="text-[10px] font-black text-gray-400 uppercase">Games</span>
                 </div>
             </div>
         `).join('');

@@ -63,6 +63,16 @@
                         <div><h3 class="font-black text-gray-800">View Audit History</h3><p class="text-[10px] text-gray-400 uppercase font-bold">System logs</p></div>
                         <span class="text-blue-600">→</span>
                     </button>
+                    <button onclick="renderPlayerStats()" class="flex items-center justify-between w-full p-4 bg-white border border-gray-100 rounded-2xl mb-3 shadow-sm active:scale-95 transition-transform">
+                        <div class="flex items-center">
+                            <span class="text-xl mr-3">👤</span>
+                            <div class="text-left">
+                                <p class="font-bold text-gray-800 leading-none">Player Stats</p>
+                                <p class="text-[10px] text-gray-400 uppercase mt-1 font-black">Attendance Tracking</p>
+                            </div>
+                        </div>
+                        <span class="text-gray-300">→</span>
+                    </button>
                 </div>
             </div>
 
@@ -190,6 +200,19 @@
                 </div>
             </div>
         </div>
+
+        <div id="view-stats" class="hidden p-4">
+            <div class="flex items-center mb-6">
+                <button onclick="showAdmin()" class="mr-4 text-gray-400">←</button>
+                <h2 class="text-xl font-black uppercase italic tracking-tighter">Player Stats</h2>
+            </div>
+
+            <div class="bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm">
+                <div id="stats-list" class="divide-y divide-gray-50">
+                    </div>
+            </div>
+        </div>
+
         <p class="text-[10px] text-gray-400">Version: #BUILD_NUMBER#</p>
     </div>
 
@@ -274,6 +297,7 @@
         document.getElementById('back-btn').classList.add('hidden');
         document.getElementById('admin-nav-btn').classList.remove('hidden');
         document.getElementById('admin-display-name').innerText = "";
+        document.getElementById('view-stats').classList.add('hidden');
     }
 
     function hideAdminSubpages() {
@@ -399,6 +423,45 @@
         if (currentSessionId) renderDetailPage();
         if (isAdmin) renderAdminLists();
     }    
+
+
+    function renderPlayerStats() {
+        hideAllViews();
+        document.getElementById('view-stats').classList.remove('hidden');
+
+        const statsList = document.getElementById('stats-list');
+        
+        // 1. Calculate the counts
+        const stats = masterPlayers.map(player => {
+            // We only count players in sessions that are 'Completed'
+            const count = allData.filter(s => 
+                s.status === 'Completed' && 
+                s.players.some(p => p.player_id === player.id)
+            ).length;
+
+            return { name: player.name, count: count };
+        });
+
+        // 2. Sort by name (A-Z) so it's easy for the Admin to find someone
+        stats.sort((a, b) => a.name.localeCompare(b.name));
+
+        // 3. Render the list
+        if (stats.length === 0) {
+            statsList.innerHTML = `<div class="p-8 text-center text-gray-400">No players found.</div>`;
+            return;
+        }
+
+        statsList.innerHTML = stats.map(s => `
+            <div class="flex items-center justify-between p-4">
+                <span class="font-bold text-gray-700">${s.name}</span>
+                <div class="flex items-center bg-gray-50 px-3 py-1 rounded-full border border-gray-100">
+                    <span class="text-xs font-black text-blue-600 mr-1">${s.count}</span>
+                    <span class="text-[9px] font-black text-gray-400 uppercase">Games</span>
+                </div>
+            </div>
+        `).join('');
+    }
+
 
 
 

@@ -1302,9 +1302,32 @@ function renderPlayerRow(p, s) {
 
     function closeEditor() { hideAdminSubpages(); document.getElementById('admin-active-list').classList.remove('hidden'); }
 
+    function setupVenueDropdown() {
+        const select = document.getElementById('location');
+        if (!select) return;
+
+        select.innerHTML = '<option value="" disabled selected>Select a venue</option>';
+        VENUES.forEach(v => {
+            let opt = document.createElement('option');
+            opt.value = v.id; // Store the ID
+            opt.innerHTML = v.name;
+            select.appendChild(opt);
+        });
+    }
+
 
     async function saveSession() {
         const sessionId = document.getElementById('edit-id').value;
+        const selectedId = document.getElementById('location').value;
+
+        // Find the full venue object in our JS list based on the ID
+        const venueDetail = VENUES.find(v => v.id === selectedId);
+
+        if (!venueDetail) {
+            alert("Please select a venue!");
+            return;
+        }
+        const combinedLocation = `${venueDetail.name} | ${venueDetail.address} | ${venueDetail.mapUrl}`;
         
         // Convert the string from the dropdown into a real Boolean
         const isVisibleValue = document.getElementById('f-visible').value === "true";
@@ -1312,7 +1335,7 @@ function renderPlayerRow(p, s) {
         const sData = { 
             date: document.getElementById('f-date').value, 
             time: document.getElementById('f-time').value, 
-            location: document.getElementById('f-loc').value, 
+            location: combinedLocation, //.getElementById('f-loc').value, 
             capacity: parseInt(document.getElementById('f-cap').value), 
             fee: document.getElementById('f-fee').value,
             admin_notes: document.getElementById('f-notes').value,
@@ -1398,6 +1421,21 @@ function renderPlayerRow(p, s) {
             }
         }
     }
+
+    const VENUES = [
+    { 
+        id: "v1",
+        name: "ActiveSG Clementi", 
+        address: "518 Clementi Ave 3, Singapore 129907",
+        mapUrl: "https://maps.app.goo.gl/xyz123" 
+    },
+    { 
+        id: "v2",
+        name: "OCBC Arena", 
+        address: "5 Stadium Dr, Singapore 397631",
+        mapUrl: "https://maps.app.goo.gl/abc456"
+    }
+];
 
 
     window.onload = async () => {

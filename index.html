@@ -953,7 +953,7 @@ function renderPlayerRow(p, s) {
             : session.location;
 
 
-        const msg = `🏸 *BADMINTON*\n📅 *Date:* ${formatDateWithDay(s.date)}\n⏰ *Time:* ${s.time}\n📍 *Loc:* ${locationDetails}\n💰 *Fee:* ${s.fee}\n🏦 *Pay to:* \n${s.payment_method || 'Contact Admin'}\n\n*Confirmed:*\n${pList || '_None_'}${wList}\n\n${instruction}`;
+        let msg = `🏸 *BADMINTON*\n📅 *Date:* ${formatDateWithDay(s.date)}\n⏰ *Time:* ${s.time}\n📍 *Loc:* ${locationDetails}\n💰 *Fee:* ${s.fee}\n🏦 *Pay to:* \n${s.payment_method || 'Contact Admin'}\n\n*Confirmed:*\n${pList || '_None_'}${wList}\n\n${instruction}`;
 
         // --- ADD THE DEFAULT FOOTER HERE ---
         msg += `\n\nClick the link below to join/withdraw:\n${window.location.origin}${window.location.pathname}?session=${s.id}`;

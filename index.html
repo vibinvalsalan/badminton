@@ -942,9 +942,18 @@ function renderPlayerRow(p, s) {
         const pList = s.players.map((p, i) => `${i + 1}. ${p.player_name}${p.payment_status === 'Paid' ? ' *Paid*' : ''}`).join('\n');
         const wList = s.waitlist.length > 0 ? `\n\n*Waitlist:*\n${s.waitlist.map((p, i) => `W${i+1}. ${p.player_name}`).join('\n')}` : '';
         // Check if there's a special instruction
-            const instruction = s.special_instruction ? `\n⚠️ *Note:* ${s.special_instruction}` : '';
+        const instruction = s.special_instruction ? `\n⚠️ *Note:* ${s.special_instruction}` : '';
 
-        const msg = `🏸 *BADMINTON*\n📅 *Date:* ${formatDateWithDay(s.date)}\n⏰ *Time:* ${s.time}\n📍 *Loc:* ${s.location}\n💰 *Fee:* ${s.fee}\n🏦 *Pay to:* \n${s.payment_method || 'Contact Admin'}\n\n*Confirmed:*\n${pList || '_None_'}${wList}\n\n${instruction}`;
+        // 1. Look up the full details from your VENUES constant using the name
+        const venueInfo = VENUES.find(v => v.name === s.location);
+
+        // 2. Fallback in case the venue name isn't found in the constant
+        const locationDetails = venueInfo 
+            ? `${venueInfo.name}\nAddress: ${venueInfo.address}\n Map: ${venueInfo.mapUrl}`
+            : session.location;
+
+
+        const msg = `🏸 *BADMINTON*\n📅 *Date:* ${formatDateWithDay(s.date)}\n⏰ *Time:* ${s.time}\n📍 *Loc:* ${locationDetails}\n💰 *Fee:* ${s.fee}\n🏦 *Pay to:* \n${s.payment_method || 'Contact Admin'}\n\n*Confirmed:*\n${pList || '_None_'}${wList}\n\n${instruction}`;
 
         // --- ADD THE DEFAULT FOOTER HERE ---
         msg += `\n\nClick the link below to join/withdraw:\n${window.location.origin}${window.location.pathname}?session=${s.id}`;
@@ -1350,7 +1359,7 @@ function renderPlayerRow(p, s) {
                 Swal.fire('Error', 'Please select a venue!', 'error');
                 return;
             }
-            finalLocation = `${venueDetail.name} | ${venueDetail.address} | ${venueDetail.mapUrl}`;
+            finalLocation = venueDetail.name;
         }
     
         const isVisibleValue = document.getElementById('f-visible').value === "true";
@@ -1452,15 +1461,15 @@ function renderPlayerRow(p, s) {
     const VENUES = [
     { 
         id: "v1",
-        name: "ActiveSG Clementi", 
-        address: "518 Clementi Ave 3, Singapore 129907",
-        mapUrl: "https://maps.app.goo.gl/xyz123" 
+        name: "Oasis Academy", 
+        address: "King William St,Media City, Salford M50 3UQ",
+        mapUrl: "https://maps.app.goo.gl/2E132EdtgRi1aExw6" 
     },
     { 
         id: "v2",
-        name: "OCBC Arena", 
-        address: "5 Stadium Dr, Singapore 397631",
-        mapUrl: "https://maps.app.goo.gl/abc456"
+        name: "Eccles Leisure Centre", 
+        address: "Barton Ln, Eccles, Manchester M30 0DD",
+        mapUrl: "https://maps.app.goo.gl/tRYWpChRaL5ij2L67"
     }
 ];
 

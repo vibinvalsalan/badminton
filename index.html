@@ -137,6 +137,14 @@
 
                     <div>
                         <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Location</label>
+                        <!-- Dropdown for Creating -->
+                            <select id="f-loc-select" class="w-full bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold"></select>
+                            
+                            <!-- Text Field for Editing (Hidden by default) -->
+                            <!--<input type="text" id="f-loc-text" class="hidden w-full p-4 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-blue-500" placeholder="Enter venue name">-->
+                            <input type="text" id="f-loc-text" class="hidden w-full bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+
+                        <select id="f-loc" ...></select>.
                         <input type="text" id="f-loc" class="w-full bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all">
                     </div>
 
@@ -1273,10 +1281,15 @@ function renderPlayerRow(p, s) {
         if (id) {
             const s = allData.find(x => x.id === id);
             if (s) {
+
+                // Toggle visibility
+                document.getElementById('f-loc-select').classList.add('hidden');
+                document.getElementById('f-loc-text').classList.remove('hidden');    
+
                 document.getElementById('edit-id').value = s.id;
                 document.getElementById('f-date').value = s.date;
                 document.getElementById('f-time').value = s.time;
-                document.getElementById('f-loc').value = s.location;
+                document.getElementById('f-loc-text').value = s.location;
                 document.getElementById('f-cap').value = s.capacity;
                 document.getElementById('f-fee').value = s.fee;
                 document.getElementById('f-notes').value = s.admin_notes || '';
@@ -1292,8 +1305,11 @@ function renderPlayerRow(p, s) {
         } else {
             document.getElementById('edit-id').value = "";
             visibleSelect.value = "true"; // Default to Public for new sessions
+            // Show dropdown, hide text field
+            document.getElementById('f-loc-select').classList.remove('hidden');
+            document.getElementById('f-loc-text').classList.add('hidden');
             document.getElementById('editor-title').innerText = "New Session";
-            ['f-date', 'f-time', 'f-loc', 'f-cap', 'f-fee', 'f-notes','f-payment-method','f-instruction'].forEach(i => {
+            ['f-date', 'f-time', 'f-loc-text', 'f-cap', 'f-fee', 'f-notes','f-payment-method','f-instruction'].forEach(i => {
                 document.getElementById(i).value = "";
             });
             setupVenueDropdown();
@@ -1305,7 +1321,7 @@ function renderPlayerRow(p, s) {
     function closeEditor() { hideAdminSubpages(); document.getElementById('admin-active-list').classList.remove('hidden'); }
 
     function setupVenueDropdown() {
-        const select = document.getElementById('f-loc'); // Ensure this ID matches your HTML
+        const select = document.getElementById('f-loc-select'); // Ensure this ID matches your HTML
         if (!select) return;
 
         select.innerHTML = '<option value="" disabled selected>Select a venue</option>';

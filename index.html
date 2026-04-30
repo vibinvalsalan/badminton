@@ -144,8 +144,8 @@
                             <!--<input type="text" id="f-loc-text" class="hidden w-full p-4 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-blue-500" placeholder="Enter venue name">-->
                             <input type="text" id="f-loc-text" class="hidden w-full bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all">
 
-                        <select id="f-loc" ...></select>.
-                        <input type="text" id="f-loc" class="w-full bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                        <!-- <select id="f-loc" ...></select>. -->
+                        <!-- <input type="text" id="f-loc" class="w-full bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all"> -->
                     </div>
 
                     <div class="grid grid-cols-1 gap-4">
@@ -1336,33 +1336,42 @@ function renderPlayerRow(p, s) {
 
     async function saveSession() {
         const sessionId = document.getElementById('edit-id').value;
-        const selectedId = document.getElementById('f-loc').value;
+        let finalLocation = "";
 
-        // Find the full venue object in our JS list based on the ID
-        const venueDetail = VENUES.find(v => v.id === selectedId);
+        if (sessionId) {
+            // EDIT MODE: Take value from the text field
+            finalLocation = document.getElementById('f-loc-text').value;
+        } else {
+            // CREATE MODE: Get selected ID from dropdown and find details
+            const selectedId = document.getElementById('f-loc-select').value;
+            const venueDetail = VENUES.find(v => v.id === selectedId);
 
-        if (!venueDetail) {
-            alert("Please select a venue!");
-            return;
+            if (!venueDetail) {
+                Swal.fire('Error', 'Please select a venue!', 'error');
+                return;
+            }
+            finalLocation = `${venueDetail.name} | ${venueDetail.address} | ${venueDetail.mapUrl}`;
         }
-        const combinedLocation = `${venueDetail.name} | ${venueDetail.address} | ${venueDetail.mapUrl}`;
-        
-        // Convert the string from the dropdown into a real Boolean
+    
         const isVisibleValue = document.getElementById('f-visible').value === "true";
 
         const sData = { 
             date: document.getElementById('f-date').value, 
             time: document.getElementById('f-time').value, 
-            location: combinedLocation, //.getElementById('f-loc').value, 
+            location: finalLocation, // Now correctly handles both modes
             capacity: parseInt(document.getElementById('f-cap').value), 
             fee: document.getElementById('f-fee').value,
             admin_notes: document.getElementById('f-notes').value,
             is_visible: isVisibleValue,
-            payment_method: document.getElementById('f-payment-method').value ,
-            special_instruction: document.getElementById('f-instruction').value, // Add this line
+            payment_method: document.getElementById('f-payment-method').value,
+            special_instruction: document.getElementById('f-instruction').value,
             status: document.getElementById('f-status').value,
-            is_deleted: false // Explicitly set for SQL filtering
+            is_deleted: false 
         };
+
+
+
+
 
         let result;
         let actionType;

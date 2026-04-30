@@ -1296,6 +1296,8 @@ function renderPlayerRow(p, s) {
             ['f-date', 'f-time', 'f-loc', 'f-cap', 'f-fee', 'f-notes','f-payment-method','f-instruction'].forEach(i => {
                 document.getElementById(i).value = "";
             });
+            setupVenueDropdown();
+
         }
     }
 
@@ -1303,13 +1305,13 @@ function renderPlayerRow(p, s) {
     function closeEditor() { hideAdminSubpages(); document.getElementById('admin-active-list').classList.remove('hidden'); }
 
     function setupVenueDropdown() {
-        const select = document.getElementById('location');
+        const select = document.getElementById('f-loc'); // Ensure this ID matches your HTML
         if (!select) return;
 
         select.innerHTML = '<option value="" disabled selected>Select a venue</option>';
         VENUES.forEach(v => {
             let opt = document.createElement('option');
-            opt.value = v.id; // Store the ID
+            opt.value = v.id; // The ID we use to .find() later
             opt.innerHTML = v.name;
             select.appendChild(opt);
         });
@@ -1318,7 +1320,7 @@ function renderPlayerRow(p, s) {
 
     async function saveSession() {
         const sessionId = document.getElementById('edit-id').value;
-        const selectedId = document.getElementById('location').value;
+        const selectedId = document.getElementById('f-loc').value;
 
         // Find the full venue object in our JS list based on the ID
         const venueDetail = VENUES.find(v => v.id === selectedId);

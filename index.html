@@ -949,14 +949,14 @@ function renderPlayerRow(p, s) {
 
         // 2. Fallback in case the venue name isn't found in the constant
         const locationDetails = venueInfo 
-            ? `${venueInfo.name}\nAddress: ${venueInfo.address}\n Map: ${venueInfo.mapUrl}`
+            ? `${venueInfo.name}\n${venueInfo.address}\n${venueInfo.mapUrl}`
             : session.location;
 
 
         let msg = `🏸 *BADMINTON*\n📅 *Date:* ${formatDateWithDay(s.date)}\n⏰ *Time:* ${s.time}\n📍 *Loc:* ${locationDetails}\n💰 *Fee:* ${s.fee}\n🏦 *Pay to:* \n${s.payment_method || 'Contact Admin'}\n\n*Confirmed:*\n${pList || '_None_'}${wList}\n\n${instruction}`;
 
         // --- ADD THE DEFAULT FOOTER HERE ---
-        msg += `\n\nClick the link below to join/withdraw:\n${window.location.origin}${window.location.pathname}?session=${s.id}`;
+        msg += `\n\nClick the link below to join or drop from session:\n${window.location.origin}${window.location.pathname}?session=${s.id}`;
         navigator.clipboard.writeText(msg).then(() => Swal.fire({ toast: true, position: 'top', icon: 'success', title: 'Copied to clipboard!', showConfirmButton: false, timer: 1500 }));
     }
 
@@ -1462,13 +1462,13 @@ function renderPlayerRow(p, s) {
     { 
         id: "v1",
         name: "Oasis Academy", 
-        address: "King William St,Media City, Salford M50 3UQ",
+        address: "King William St,Media City,M50 3UQ",
         mapUrl: "https://maps.app.goo.gl/2E132EdtgRi1aExw6" 
     },
     { 
         id: "v2",
         name: "Eccles Leisure Centre", 
-        address: "Barton Ln, Eccles, Manchester M30 0DD",
+        address: "Barton Ln, Eccles M30 0DD",
         mapUrl: "https://maps.app.goo.gl/tRYWpChRaL5ij2L67"
     }
 ];

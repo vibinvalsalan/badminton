@@ -949,7 +949,7 @@ function renderPlayerRow(p, s) {
 
         // 2. Fallback in case the venue name isn't found in the constant
         const locationDetails = venueInfo 
-            ? `${venueInfo.name}\n${venueInfo.address}\n${venueInfo.mapUrl}`
+            ? `${venueInfo.name}\n${venueInfo.address}` //\n${venueInfo.mapUrl}
             : session.location;
 
 

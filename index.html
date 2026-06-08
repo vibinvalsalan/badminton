@@ -1069,8 +1069,8 @@ function renderPlayerRow(p, s) {
             payment_status: 'Unpaid'
         }]);
 
-        const displayTime = (s.start_time && s.end_time) 
-            ? `${formatTime12Hour(s.start_time)} - ${formatTime12Hour(s.end_time)}` 
+        const displayTime = (session.start_time && session.end_time) 
+            ? `${formatTime12Hour(session.start_time)} - ${formatTime12Hour(session.end_time)}` 
             : 'N/A';
 
 		if (!error) {
@@ -1095,7 +1095,7 @@ function renderPlayerRow(p, s) {
 				html: `
 					<div class="text-left bg-gray-50 p-4 rounded-2xl mt-2 text-sm">
 						<p class="mb-1"><strong>Player:</strong> ${player.name}</p>
-						<p class="mb-1"><strong>Session:</strong> ${session.time}</p>
+						<p class="mb-1"><strong>Session:</strong> ${displayTime}</p>
 						<p class="mb-1"><strong>Date:</strong> ${formatDateWithDay(session.date)}</p>
 						<p><strong>Venue:</strong> ${session.location}</p>
 					</div>

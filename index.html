@@ -129,6 +129,10 @@
                     <span class="text-[10px] bg-red-100 text-red-600 px-2 py-1 rounded-lg font-bold tracking-wide">ANALYTICS</span>
                 </div>
 
+                <button onclick="openManualInfractionModal()" class="w-full bg-gray-900 hover:bg-gray-800 text-white font-black uppercase tracking-wider text-xs py-3 px-4 rounded-2xl shadow-sm flex justify-center items-center gap-2 mb-2 transition-all">
+                    <span>➕</span> Log Manual Attendance Event
+                </button>
+
                 <div class="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm space-y-3">
                     <div class="grid grid-cols-2 gap-2">
                         <div>
@@ -1686,6 +1690,9 @@ function renderPlayerRow(p, s) {
                             <span class="text-[9px] font-black border uppercase px-2 py-0.5 rounded-md ${badgeStyle}">
                                 ${record.infraction_type}
                             </span>
+                            <button onclick="deleteInfractionRecord(${record.id})" class="text-gray-400 hover:text-red-500 text-sm p-1 transition-colors" title="Delete Record">
+                                🗑️
+                            </button>
                         </div>
                         
                         <div class="bg-gray-50/60 p-2 rounded-xl border border-gray-50 text-[11px] text-gray-600">
@@ -1701,10 +1708,152 @@ function renderPlayerRow(p, s) {
             }).join('');
         }
 
+        // 1. Delete a record directly out of the underlying attendance_infractions table
+        async function deleteInfractionRecord(id) {
+            if (!id) return;
+
+            // Prompt user for confirmation before wiping data
+            const result = await Swal.fire({
+                title: 'Delete Record?',
+                text: 'Are you sure you want to remove this attendance event record? This action cannot be undone.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444', // Red-500
+                cancelButtonColor: '#6b7280',  // Gray-500
+                confirmButtonText: 'Yes, delete it',
+                cancelButtonText: 'Cancel'
+            });
+
+            if (!result.isConfirmed) return;
+
+            try {
+                // Targets the core table directly using the view row's ID reference
+                const { error } = await _supabase
+                    .from('attendance_infractions')
+                    .delete()
+                    .eq('id', id);
+
+                if (error) throw error;
+
+                // Visual confirmation toast banner
+                Swal.fire({
+                    toast: true,
+                    position: 'top',
+                    icon: 'success',
+                    title: 'Record deleted successfully',
+                    showConfirmButton: false,
+                    timer: 1500
+                });
+
+                // Re-fetch database info to update the analytics tables on the screen
+                await fetchInfractionsData();
+
+            } catch (err) {
+                console.error("Deletion Error:", err.message);
+                Swal.fire('Error', `Failed to delete record: ${err.message}`, 'error');
+            }
+        }
 
 
+                // 2. Open a dynamic creation form modal populated with real players and session data
+        async function openManualInfractionModal() {
+            // 1. Fetch latest players if your global cache isn't available
+            let playerOpts = [];
+            try {
+                const { data: pData } = await _supabase.from('players').select('id, name').order('name');
+                playerOpts = pData || [];
+            } catch(e) { console.error(e); }
 
+            // 2. Map available session options from your cached master list
+            const sessionOpts = (allData || []).map(s => {
+                const timeTag = (s.start_time && s.end_time) ? ` (${formatTime12Hour(s.start_time)})` : '';
+                return { id: s.id, label: `${s.date}${timeTag} - ${s.location || 'TBA'}` };
+            });
 
+            if (playerOpts.length === 0 || sessionOpts.length === 0) {
+                Swal.fire('Notice', 'Cannot open form: Ensure you have loaded active sessions and players first.', 'info');
+                return;
+            }
+
+            // 3. Build dynamic HTML options strings
+            const playerSelectHtml = playerOpts.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+            const sessionSelectHtml = sessionOpts.map(s => `<option value="${s.id}">${s.label}</option>`).join('');
+
+            // 4. Render the input modal markup cleanly inside a SweetAlert layout container
+            const { value: formValues } = await Swal.fire({
+                title: '✏️ LOG ATTENDANCE EVENT',
+                html: `
+                    <div class="text-left space-y-3 font-sans text-xs">
+                        <div>
+                            <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Select Player</label>
+                            <select id="swal-inf-player" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 outline-none font-bold text-gray-700">${playerSelectHtml}</select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Select Target Session</label>
+                            <select id="swal-inf-session" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 outline-none font-medium text-gray-700">${sessionSelectHtml}</select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Infraction Category</label>
+                            <select id="swal-inf-type" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 outline-none font-bold text-red-600">
+                                <option value="No Show">❌ No Show</option>
+                                <option value="Drop Out">🚪 Drop Out</option>
+                                <option value="Late Payment">⏰ Late Payment</option>
+                                <option value="On Time Payment">⚡ On Time Payment</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Reason / Admin Note</label>
+                            <textarea id="swal-inf-reason" placeholder="e.g., Cancelled 30 mins before start time without finding sub." class="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 outline-none h-16 text-gray-600 resize-none"></textarea>
+                        </div>
+                    </div>
+                `,
+                focusConfirm: false,
+                showCancelButton: true,
+                confirmButtonText: 'Save Record',
+                confirmButtonColor: '#111827', // Gray-900 matching your layout button
+                preConfirm: () => {
+                    return {
+                        player_id: document.getElementById('swal-inf-player').value,
+                        session_id: document.getElementById('swal-inf-session').value,
+                        infraction_type: document.getElementById('swal-inf-type').value,
+                        reason: document.getElementById('swal-inf-reason').value
+                    };
+                }
+            });
+
+            if (!formValues) return; // User canceled out of the action modal
+
+            // 5. Fire off payload injection to Supabase backend table structure
+            try {
+                const { error } = await _supabase
+                    .from('attendance_infractions')
+                    .insert([{
+                        player_id: parseInt(formValues.player_id),
+                        session_id: parseInt(formValues.session_id),
+                        infraction_type: formValues.infraction_type,
+                        reason: formValues.reason || 'Manually logged by Admin.',
+                        time_of_reporting: new Date().toISOString()
+                    }]);
+
+                if (error) throw error;
+
+                Swal.fire({
+                    toast: true,
+                    position: 'top',
+                    icon: 'success',
+                    title: 'Event logged successfully!',
+                    showConfirmButton: false,
+                    timer: 1500
+                });
+
+                // Trigger a fresh calculation redraw 
+                await fetchInfractionsData();
+
+            } catch (err) {
+                console.error("Manual Creation Error:", err.message);
+                Swal.fire('Error', `Failed to write event: ${err.message}`, 'error');
+            }
+        }
 
 
 

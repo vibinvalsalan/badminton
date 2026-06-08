@@ -78,6 +78,14 @@
                         </div>
                     </button>
 
+                    <button onclick="showInfractionsManager()" class="col-span-2 bg-white border border-red-100 bg-red-50/5 p-4 rounded-3xl shadow-sm text-left flex justify-between items-center transition-all hover:bg-red-50/20">
+                        <div>
+                            <h3 class="font-black text-gray-800 text-sm">Attendance Infractions</h3>
+                            <p class="text-[9px] text-red-500 uppercase font-bold">No Shows, Drop Outs &amp; Late Payments</p>
+                        </div>
+                        <span class="text-gray-300">→</span>
+                    </button>
+
                     <button onclick="showAuditHistory()" class="col-span-2 bg-white border border-gray-100 p-4 rounded-3xl shadow-sm text-left flex justify-between items-center mt-2">
                         <div><h3 class="font-black text-gray-800 text-sm">System Audit History</h3><p class="text-[9px] text-gray-400 uppercase font-bold">Logs</p></div>
                         <span class="text-gray-300">→</span>
@@ -113,6 +121,49 @@
             <div id="admin-audit-list" class="hidden space-y-4">
                 <h2 class="text-xl font-black mb-4">Audit History</h2>
                 <div id="list-audit" class="space-y-2 max-h-[500px] overflow-y-auto pr-2"></div>
+            </div>
+
+            <div id="admin-infractions-list" class="hidden space-y-4 animate-fadeIn">
+                <div class="flex justify-between items-center mb-2">
+                    <h2 class="text-xl font-black uppercase tracking-tight text-gray-900">Attendance Tracker</h2>
+                    <span class="text-[10px] bg-red-100 text-red-600 px-2 py-1 rounded-lg font-bold tracking-wide">ANALYTICS</span>
+                </div>
+
+                <div class="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm space-y-3">
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="text-[9px] font-black text-gray-400 uppercase ml-1">From Date</label>
+                            <input type="date" id="inf-from-date" onchange="filterInfractions()" class="w-full bg-gray-50 p-2.5 rounded-xl border-none ring-1 ring-gray-200 outline-none text-xs">
+                        </div>
+                        <div>
+                            <label class="text-[9px] font-black text-gray-400 uppercase ml-1">To Date</label>
+                            <input type="date" id="inf-to-date" onchange="filterInfractions()" class="w-full bg-gray-50 p-2.5 rounded-xl border-none ring-1 ring-gray-200 outline-none text-xs">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="text-[9px] font-black text-gray-400 uppercase ml-1">Infraction Type Filter</label>
+                        <select id="inf-type-select" onchange="filterInfractions()" class="w-full bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 outline-none text-xs font-bold text-gray-700">
+                            <option value="ALL">Show All Categories</option>
+                            <option value="Late Payment">Late Payment</option>
+                            <option value="On Time Payment">On Time Payment</option>
+                            <option value="No Show">No Show</option>
+                            <option value="Drop Out">Drop Out</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="bg-white border border-gray-100 p-3 rounded-2xl shadow-sm text-center">
+                        <p class="text-[9px] font-bold text-gray-400 uppercase tracking-wide">Records Shown</p>
+                        <span id="stat-inf-count" class="text-xl font-black text-blue-600">0</span>
+                    </div>
+                    <div class="bg-white border border-gray-100 p-3 rounded-2xl shadow-sm text-center">
+                        <p class="text-[9px] font-bold text-gray-400 uppercase tracking-wide">Infraction Ratio</p>
+                        <span id="stat-inf-pct" class="text-xl font-black text-red-500">0%</span>
+                    </div>
+                </div>
+
+                <div id="list-infractions" class="space-y-2 max-h-[450px] overflow-y-auto pr-1"></div>
             </div>
 
             <div id="admin-editor" class="hidden animate-fadeIn bg-white p-6 rounded-3xl shadow-xl space-y-4 border border-gray-100">
@@ -328,14 +379,14 @@
     }
 
     function hideAdminSubpages() {
-        ['admin-dashboard', 'admin-active-list', 'admin-past-list', 'admin-player-manager', 'admin-audit-list', 'admin-editor', 'admin-player-editor'].forEach(id => {
+        ['admin-dashboard', 'admin-active-list', 'admin-past-list', 'admin-player-manager', 'admin-audit-list', 'admin-editor', 'admin-player-editor','admin-infractions-list'].forEach(id => {
             const el = document.getElementById(id);
             if(el) el.classList.add('hidden');
         });
     }
 
     function handleBack() {
-        const subpages = ['admin-active-list', 'admin-past-list', 'admin-player-manager', 'admin-audit-list'];
+        const subpages = ['admin-active-list', 'admin-past-list', 'admin-player-manager', 'admin-audit-list','admin-infractions-list'];
         const isSubOpen = subpages.some(id => !document.getElementById(id).classList.contains('hidden'));
         
         if (isSubOpen) goToAdmin();
@@ -1506,20 +1557,158 @@ function renderPlayerRow(p, s) {
         }
     }
 
-    const VENUES = [
-    { 
-        id: "v1",
-        name: "Oasis Academy", 
-        address: "King William St,Media City,M50 3UQ",
-        mapUrl: "https://maps.app.goo.gl/2E132EdtgRi1aExw6" 
-    },
-    { 
-        id: "v2",
-        name: "Eccles Leisure Centre", 
-        address: "Barton Ln, Eccles M30 0DD",
-        mapUrl: "https://maps.app.goo.gl/tRYWpChRaL5ij2L67"
-    }
-];
+        const VENUES = [
+            { 
+                id: "v1",
+                name: "Oasis Academy", 
+                address: "King William St,Media City,M50 3UQ",
+                mapUrl: "https://maps.app.goo.gl/2E132EdtgRi1aExw6" 
+            },
+            { 
+                id: "v2",
+                name: "Eccles Leisure Centre", 
+                address: "Barton Ln, Eccles M30 0DD",
+                mapUrl: "https://maps.app.goo.gl/tRYWpChRaL5ij2L67"
+            }
+        ];
+
+        let allInfractions = []; // Stores the raw fetched view records globally
+
+        // 1. Navigation initialization router
+        async function showInfractionsManager() {
+            hideAdminSubpages();
+            document.getElementById('admin-infractions-list').classList.remove('hidden');
+            document.getElementById('back-btn').classList.remove('hidden'); // Ensure the back arrow shows up
+            
+            // Set a default date boundary to help users navigate (Past 30 days to the end of the current month)
+            const today = new Date();
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(today.getDate() - 30);
+            
+            document.getElementById('inf-from-date').value = thirtyDaysAgo.toISOString().split('T')[0];
+            document.getElementById('inf-to-date').value = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0];
+
+            await fetchInfractionsData();
+        }
+
+        // 2. Fetch records asynchronously directly out of the view_attendance_infractions PostgreSQL View
+        async function fetchInfractionsData() {
+            const container = document.getElementById('list-infractions');
+            container.innerHTML = `<p class="text-center text-[10px] text-gray-400 font-bold uppercase py-6 animate-pulse">Loading tracker data...</p>`;
+
+            try {
+                const { data, error } = await _supabase
+                    .from('view_attendance_infractions')
+                    .select('*')
+                    .order('session_date', { ascending: false });
+
+                if (error) throw error;
+
+                allInfractions = data || [];
+                filterInfractions(); // Evaluate constraints immediately after caching
+            } catch (err) {
+                console.error("View Fetch Error:", err.message);
+                container.innerHTML = `<p class="text-center text-xs text-red-500 font-bold p-4">Error loading data view.</p>`;
+            }
+        }
+
+        // 3. Process date arrays and drop-down selectors right on the user's machine
+        function filterInfractions() {
+            const fromDateVal = document.getElementById('inf-from-date').value;
+            const toDateVal = document.getElementById('inf-to-date').value;
+            const typeFilter = document.getElementById('inf-type-select').value;
+            
+            // Setup clean bounds for checking dates safely
+            const startBound = fromDateVal ? new Date(fromDateVal).setHours(0,0,0,0) : null;
+            const endBound = toDateVal ? new Date(toDateVal).setHours(23,59,59,999) : null;
+
+            const filtered = allInfractions.filter(item => {
+                // Drop rows without valid session dates
+                if (!item.session_date) return false;
+                const targetDate = new Date(item.session_date).setHours(0,0,0,0);
+                
+                if (startBound && targetDate < startBound) return false;
+                if (endBound && targetDate > endBound) return false;
+
+                // Drop rows if they don't match the dropdown selection category
+                if (typeFilter !== 'ALL' && item.infraction_type !== typeFilter) return false;
+
+                return true;
+            });
+
+            // Compute live stats counters based on what's matching on the screen
+            const totalSelected = filtered.length;
+            const totalInfractionsOnly = filtered.filter(i => i.infraction_type !== 'On Time Payment').length;
+            const ratioPercentage = totalSelected > 0 ? Math.round((totalInfractionsOnly / totalSelected) * 100) : 0;
+
+            document.getElementById('stat-inf-count').innerText = totalSelected;
+            document.getElementById('stat-inf-pct').innerText = `${ratioPercentage}%`;
+
+            renderInfractionsUiList(filtered);
+        }
+
+        // 4. Construct the HTML item structures for the view layout
+        function renderInfractionsUiList(records) {
+            const container = document.getElementById('list-infractions');
+            
+            if (records.length === 0) {
+                container.innerHTML = `<p class="text-center text-gray-400 italic py-8 text-xs">No records matching those parameters.</p>`;
+                return;
+            }
+
+            container.innerHTML = records.map(record => {
+                // Contextual layouts matching different category states
+                let badgeStyle = "bg-gray-100 text-gray-700 border-gray-200";
+                let icon = "📋";
+
+                if (record.infraction_type === 'Late Payment') {
+                    badgeStyle = "bg-amber-50 text-amber-700 border-amber-200";
+                    icon = "⏰";
+                } else if (record.infraction_type === 'No Show' || record.infraction_type === 'Drop Out') {
+                    badgeStyle = "bg-red-50 text-red-700 border-red-200";
+                    icon = "❌";
+                } else if (record.infraction_type === 'On Time Payment') {
+                    badgeStyle = "bg-green-50 text-green-700 border-green-200";
+                    icon = "⚡";
+                }
+
+                // Parse human-readable session dates and 12-hour clean display tags
+                const formattedDate = typeof formatDateWithDay === 'function' ? formatDateWithDay(record.session_date) : record.session_date;
+                const timeDisplayString = record.session_start_time ? ` at ${formatTime12Hour(record.session_start_time)}` : '';
+
+                return `
+                    <div class="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm text-xs flex flex-col space-y-2 animate-fadeIn">
+                        <div class="flex justify-between items-center">
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-sm">${icon}</span>
+                                <span class="font-black text-gray-900 text-sm leading-none">${record.player_name || 'Unknown Player'}</span>
+                            </div>
+                            <span class="text-[9px] font-black border uppercase px-2 py-0.5 rounded-md ${badgeStyle}">
+                                ${record.infraction_type}
+                            </span>
+                        </div>
+                        
+                        <div class="bg-gray-50/60 p-2 rounded-xl border border-gray-50 text-[11px] text-gray-600">
+                            <p><strong>Session:</strong> ${formattedDate}${timeDisplayString}</p>
+                            <p class="mt-1 text-gray-500 italic">"${record.reason || 'No additional details provided.'}"</p>
+                        </div>
+                        
+                        <div class="text-[9px] text-gray-300 font-bold uppercase tracking-wider text-right">
+                            Reported: ${new Date(record.time_of_reporting).toLocaleDateString()} ${new Date(record.time_of_reporting).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+
+
+
+
+
+
+
+
 
 
     window.onload = async () => {
@@ -1535,6 +1724,7 @@ function renderPlayerRow(p, s) {
             showDetail(sessionId);
         }
     };
+
 
 
 </script>

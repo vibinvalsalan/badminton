@@ -311,7 +311,7 @@
 
 
 
-    async function logAction(action, details, playerName = null, sessionId = null) {
+    async function logAction(action, details, playerName = null, sessionId = null, playerId = null) {
         try {
             // Validation: session_info is a UUID. 
             // If sessionId is the descriptive string from your previous code, 
@@ -321,7 +321,8 @@
             const { error } = await _supabase.from('audit_logs').insert([{ 
                 action: action, 
                 details: details, 
-                player_name: playerName, 
+                player_name: playerName,
+                player_id: playerId, 
                 session_info: validSessionId // Matches your 'session_info uuid' column
             }]);
             
@@ -1242,7 +1243,7 @@ function renderPlayerRow(p, s) {
             // Combine with the shared session details
             const detailMsg = `${actionVerb} ${newStatus} for session on ${session.date}`;
 
-            await logAction(action, detailMsg, reg.player_name, session.id);
+            await logAction(action, detailMsg, reg.player_name, session.id,reg.id);
             
             // 4. Refresh the UI
             loadData();

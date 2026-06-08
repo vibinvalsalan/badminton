@@ -556,6 +556,11 @@
             card.className = "bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex items-center gap-4 cursor-pointer hover:shadow-md transition-all active:scale-[0.98] mb-3";
             card.onclick = () => showDetail(s.id);
             
+            const displayTime = (s.start_time && s.end_time) 
+                ? `${formatTime12Hour(s.start_time)} - ${formatTime12Hour(s.end_time)}` 
+                : s.time;
+
+
             card.innerHTML = `
                 <div class="flex-shrink-0 w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-xl">
                     🏸
@@ -565,7 +570,8 @@
                     <div class="flex justify-between items-start mb-1">
                         <div>
                             <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest">${formatDateWithDay(s.date)}</p>
-                            <h3 class="text-lg font-black text-gray-900 leading-tight">${s.time}</h3>${statusBadge}
+                            <h3 class="text-lg font-black text-gray-900 leading-tight">${displayTime}</h3>${statusBadge}
+                            
                         </div>
                         <span class="text-[9px] font-black px-2 py-1 rounded-full uppercase ${spotsLeft > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}">
                             ${spotsLeft > 0 ? spotsLeft + ' Left' : 'Full'}
@@ -612,6 +618,10 @@
             const target = isPast ? pastContainer : activeContainer;
             if (!target) return;
             
+
+            const detailTime = (s.start_time && s.end_time) 
+                ? `${formatTime12Hour(s.start_time)} - ${formatTime12Hour(s.end_time)}` 
+                : s.time;
             const paidCount = s.players.filter(p => p.payment_status === 'Paid').length;
             const item = document.createElement('div');
             item.className = "bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex justify-between items-center mb-2";
@@ -619,7 +629,7 @@
                 <div>
                     <p class="text-xs font-bold ${isPast ? 'text-gray-400' : 'text-blue-600'}">${formatDateWithDay(s.date)}</p>
                     <h4 class="font-black text-gray-800">
-                        ${s.time}
+                        ${detailTime}
                         ${s.is_visible === false ? '<span class="ml-2 text-[8px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full uppercase tracking-wider font-black">Hidden</span>' : ''}
                     </h4>
                     <p class="text-[10px] text-gray-400 font-bold uppercase">${s.location} • Fee: ${s.fee} • Paid: ${paidCount}/${s.players.length}</p>
@@ -945,11 +955,14 @@ function renderPlayerRow(p, s) {
 
     function formatTime12Hour(timeStr) {
         if (!timeStr) return 'N/A';
+        // Handles conversion if colon is present
         const [hours, minutes] = timeStr.split(':');
         let h = parseInt(hours, 10);
+        if (isNaN(h)) return timeStr; // Fallback safely if string isn't clean military
+        
         const ampm = h >= 12 ? 'PM' : 'AM';
         h = h % 12;
-        h = h ? h : 12; // convert 0 to 12
+        h = h ? h : 12; 
         return `${h}:${minutes} ${ampm}`;
     }
 

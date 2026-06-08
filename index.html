@@ -1757,103 +1757,103 @@ function renderPlayerRow(p, s) {
 
                 // 2. Open a dynamic creation form modal populated with real players and session data
         async function openManualInfractionModal() {
-            // 1. Fetch latest players if your global cache isn't available
-            let playerOpts = [];
-            try {
-                const { data: pData } = await _supabase.from('players').select('id, name').order('name');
-                playerOpts = pData || [];
-            } catch(e) { console.error(e); }
+    // 1. Fetch latest players
+    let playerOpts = [];
+    try {
+        const { data: pData } = await _supabase.from('players').select('id, name').order('name');
+        playerOpts = pData || [];
+    } catch(e) { console.error(e); }
 
-            // 2. Map available session options from your cached master list
-            const sessionOpts = (allData || []).map(s => {
-                const timeTag = (s.start_time && s.end_time) ? ` (${formatTime12Hour(s.start_time)})` : '';
-                return { id: s.id, label: `${s.date}${timeTag} - ${s.location || 'TBA'}` };
-            });
+    // 2. Safely map available session options from your master cache (using the true string GUID)
+    const sessionOpts = (allData || []).map(s => {
+        const timeTag = (s.start_time && s.end_time) ? ` (${formatTime12Hour(s.start_time)})` : '';
+        // Ensure s.id is kept exactly as its true data type (GUID string)
+        return { id: String(s.id), label: `${s.date}${timeTag} - ${s.location || 'TBA'}` };
+    });
 
-            if (playerOpts.length === 0 || sessionOpts.length === 0) {
-                Swal.fire('Notice', 'Cannot open form: Ensure you have loaded active sessions and players first.', 'info');
-                return;
-            }
+    if (playerOpts.length === 0 || sessionOpts.length === 0) {
+        Swal.fire('Notice', 'Cannot open form: Ensure you have loaded active sessions and players first.', 'info');
+        return;
+    }
 
-            // 3. Build dynamic HTML options strings
-            const playerSelectHtml = playerOpts.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-            const sessionSelectHtml = sessionOpts.map(s => `<option value="${s.id}">${s.label}</option>`).join('');
+    // 3. Build dynamic HTML options strings explicitly binding the true IDs
+    const playerSelectHtml = playerOpts.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+    const sessionSelectHtml = sessionOpts.map(s => `<option value="${s.id}">${s.label}</option>`).join('');
 
-            // 4. Render the input modal markup cleanly inside a SweetAlert layout container
-            const { value: formValues } = await Swal.fire({
-                title: '✏️ LOG ATTENDANCE EVENT',
-                html: `
-                    <div class="text-left space-y-3 font-sans text-xs">
-                        <div>
-                            <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Select Player</label>
-                            <select id="swal-inf-player" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 outline-none font-bold text-gray-700">${playerSelectHtml}</select>
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Select Target Session</label>
-                            <select id="swal-inf-session" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 outline-none font-medium text-gray-700">${sessionSelectHtml}</select>
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Infraction Category</label>
-                            <select id="swal-inf-type" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 outline-none font-bold text-red-600">
-                                <option value="No Show">❌ No Show</option>
-                                <option value="Drop Out">🚪 Drop Out</option>
-                                <option value="Late Payment">⏰ Late Payment</option>
-                                <option value="On Time Payment">⚡ On Time Payment</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Reason / Admin Note</label>
-                            <textarea id="swal-inf-reason" placeholder="e.g., Cancelled 30 mins before start time without finding sub." class="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 outline-none h-16 text-gray-600 resize-none"></textarea>
-                        </div>
-                    </div>
-                `,
-                focusConfirm: false,
-                showCancelButton: true,
-                confirmButtonText: 'Save Record',
-                confirmButtonColor: '#111827', // Gray-900 matching your layout button
-                preConfirm: () => {
-                    return {
-                        player_id: document.getElementById('swal-inf-player').value,
-                        session_id: document.getElementById('swal-inf-session').value,
-                        infraction_type: document.getElementById('swal-inf-type').value,
-                        reason: document.getElementById('swal-inf-reason').value
-                    };
-                }
-            });
-
-            if (!formValues) return; // User canceled out of the action modal
-
-            // 5. Fire off payload injection to Supabase backend table structure
-            try {
-                const { error } = await _supabase
-                    .from('attendance_infractions')
-                    .insert([{
-                        player_id: parseInt(formValues.player_id),
-                        session_id: parseInt(formValues.session_id),
-                        infraction_type: formValues.infraction_type,
-                        reason: formValues.reason || 'Manually logged by Admin.',
-                        time_of_reporting: new Date().toISOString()
-                    }]);
-
-                if (error) throw error;
-
-                Swal.fire({
-                    toast: true,
-                    position: 'top',
-                    icon: 'success',
-                    title: 'Event logged successfully!',
-                    showConfirmButton: false,
-                    timer: 1500
-                });
-
-                // Trigger a fresh calculation redraw 
-                await fetchInfractionsData();
-
-            } catch (err) {
-                console.error("Manual Creation Error:", err.message);
-                Swal.fire('Error', `Failed to write event: ${err.message}`, 'error');
-            }
+    // 4. Render the modal form layout
+    const { value: formValues } = await Swal.fire({
+        title: '✏️ LOG ATTENDANCE EVENT',
+        html: `
+            <div class="text-left space-y-3 font-sans text-xs">
+                <div>
+                    <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Select Player</label>
+                    <select id="swal-inf-player" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 outline-none font-bold text-gray-700">${playerSelectHtml}</select>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Select Target Session</label>
+                    <select id="swal-inf-session" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 outline-none font-medium text-gray-700">${sessionSelectHtml}</select>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Infraction Category</label>
+                    <select id="swal-inf-type" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 outline-none font-bold text-red-600">
+                        <option value="No Show">❌ No Show</option>
+                        <option value="Drop Out">🚪 Drop Out</option>
+                        <option value="Late Payment">⏰ Late Payment</option>
+                        <option value="On Time Payment">⚡ On Time Payment</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Reason / Admin Note</label>
+                    <textarea id="swal-inf-reason" placeholder="e.g., Cancelled 30 mins before start time without finding sub." class="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 outline-none h-16 text-gray-600 resize-none"></textarea>
+                </div>
+            </div>
+        `,
+        focusConfirm: false,
+        showCancelButton: true,
+        confirmButtonText: 'Save Record',
+        confirmButtonColor: '#111827',
+        preConfirm: () => {
+            return {
+                player_id: document.getElementById('swal-inf-player').value,
+                session_id: document.getElementById('swal-inf-session').value, // This grabs the string GUID value
+                infraction_type: document.getElementById('swal-inf-type').value,
+                reason: document.getElementById('swal-inf-reason').value
+            };
         }
+    });
+
+    if (!formValues) return;
+
+    // 5. Save payload to Supabase
+    try {
+        const { error } = await _supabase
+            .from('attendance_infractions')
+            .insert([{
+                player_id: parseInt(formValues.player_id),
+                session_id: formValues.session_id, // Passed as a string GUID directly (NO parseInt!)
+                infraction_type: formValues.infraction_type,
+                reason: formValues.reason || 'Manually logged by Admin.',
+                time_of_reporting: new Date().toISOString()
+            }]);
+
+        if (error) throw error;
+
+        Swal.fire({
+            toast: true,
+            position: 'top',
+            icon: 'success',
+            title: 'Event logged successfully!',
+            showConfirmButton: false,
+            timer: 1500
+        });
+
+        await fetchInfractionsData();
+
+    } catch (err) {
+        console.error("Manual Creation Error:", err.message);
+        Swal.fire('Error', `Failed to write event: ${err.message}`, 'error');
+    }
+}
 
 
 

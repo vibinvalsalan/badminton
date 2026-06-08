@@ -558,7 +558,7 @@
             
             const displayTime = (s.start_time && s.end_time) 
                 ? `${formatTime12Hour(s.start_time)} - ${formatTime12Hour(s.end_time)}` 
-                : s.time;
+                : 'N/A';
 
 
             card.innerHTML = `
@@ -621,7 +621,7 @@
 
             const detailTime = (s.start_time && s.end_time) 
                 ? `${formatTime12Hour(s.start_time)} - ${formatTime12Hour(s.end_time)}` 
-                : s.time;
+                : 'N/A';
             const paidCount = s.players.filter(p => p.payment_status === 'Paid').length;
             const item = document.createElement('div');
             item.className = "bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex justify-between items-center mb-2";
@@ -659,7 +659,9 @@
         const pOptions = masterPlayers.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
         const totalConfirmed = s.players.length;
         const totalPaid = s.players.filter(p => p.payment_status === 'Paid').length;
-
+        const detailTime = (s.start_time && s.end_time) 
+            ? `${formatTime12Hour(s.start_time)} - ${formatTime12Hour(s.end_time)}` 
+            : 'N/A';
         // Logic for Dynamic Fee Status
         const isFeeTBC = !s.fee || s.fee.toLowerCase() === 'tbc';
         const feeDisplay = isFeeTBC 
@@ -671,7 +673,7 @@
                 <div class="flex justify-between items-start mb-6">
                     <div class="space-y-1">
                         <p class="text-xl font-semibold text-gray-800">${formatDateWithDay(s.date)}</p>
-                        <p class="text-lg text-gray-600 font-medium">${s.time}</p>
+                        <p class="text-lg text-gray-600 font-medium">${detailTime}</p>
                         <div class="flex items-center gap-1 pt-1">
                             <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                             <a href="#" class="text-blue-600 hover:underline text-sm font-medium">Venue: ${s.location}</a>
@@ -986,7 +988,7 @@ function renderPlayerRow(p, s) {
 
         const formattedStart = formatTime12Hour(s.start_time);
         const formattedEnd = formatTime12Hour(s.end_time);
-        const displayTime = (s.start_time && s.end_time) ? `${formattedStart} - ${formattedEnd}` : s.time;    
+        const displayTime = (s.start_time && s.end_time) ? `${formattedStart} - ${formattedEnd}` : 'N/A';    
 
         let msg = `🏸 *BADMINTON*\n📅 *Date:* ${formatDateWithDay(s.date)}\n⏰ *Time:* ${displayTime}\n📍 *Loc:* ${locationDetails}\n💰 *Fee:* ${s.fee}\n🏦 *Pay to:* \n${s.payment_method || 'Contact Admin'}\n\n*Confirmed:*\n${pList || '_None_'}${wList}\n\n${instruction}`;
 
@@ -1067,9 +1069,13 @@ function renderPlayerRow(p, s) {
             payment_status: 'Unpaid'
         }]);
 
+        const displayTime = (s.start_time && s.end_time) 
+            ? `${formatTime12Hour(s.start_time)} - ${formatTime12Hour(s.end_time)}` 
+            : 'N/A';
+
 		if (!error) {
             const actionVerb = isAdmin ? `${adminName} added ${player.name} to` : `${player.name} joined`;
-            const logMessage = `${actionVerb} session on ${session.date} (${session.time}), Status: ${status}`;
+            const logMessage = `${actionVerb} session on ${session.date} (${displayTime}), Status: ${status}`;
             await logAction(
 				'PLAYER_JOINED_SESSION', 
 				logMessage, 
@@ -1333,8 +1339,6 @@ function renderPlayerRow(p, s) {
                 document.getElementById('edit-id').value = s.id;
                 document.getElementById('f-date').value = s.date;
 
-
-                //document.getElementById('f-time').value = s.time;
                 document.getElementById('f-start-time').value = s.start_time || '';
                 document.getElementById('f-end-time').value = s.end_time || '';
 

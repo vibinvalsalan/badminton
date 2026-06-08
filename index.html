@@ -1243,7 +1243,7 @@ function renderPlayerRow(p, s) {
             // Combine with the shared session details
             const detailMsg = `${actionVerb} ${newStatus} for session on ${session.date}`;
 
-            await logAction(action, detailMsg, reg.player_name, session.id,reg.id);
+            await logAction(action, detailMsg, reg.player_name, session.id,reg.player_id);
             
             // 4. Refresh the UI
             loadData();

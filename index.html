@@ -129,10 +129,21 @@
                             <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Date</label>
                             <input type="date" id="f-date" class="w-full bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all">
                         </div>
-                        <div>
+                        <!-- <div>
                             <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Time</label>
                             <input type="text" id="f-time" placeholder="19:00 - 21:00" class="w-full bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all">
-                        </div>
+                        </div> -->
+
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Session Duration</label>
+                            <div class="flex items-center gap-2">
+                                <input type="time" id="f-start-time" class="w-1/2 bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm transition-all">
+                                <span class="text-xs font-bold text-gray-400 uppercase">to</span>
+                                <input type="time" id="f-end-time" class="w-1/2 bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm transition-all">
+                            </div>
+                        </div>    
+
+
                     </div>
 
                     <div>
@@ -932,7 +943,15 @@ function renderPlayerRow(p, s) {
     }
 
 
-
+    function formatTime12Hour(timeStr) {
+        if (!timeStr) return 'N/A';
+        const [hours, minutes] = timeStr.split(':');
+        let h = parseInt(hours, 10);
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        h = h % 12;
+        h = h ? h : 12; // convert 0 to 12
+        return `${h}:${minutes} ${ampm}`;
+    }
 
 
     // --- WHATSAPP LOGIC ---
@@ -952,8 +971,11 @@ function renderPlayerRow(p, s) {
             ? `${venueInfo.name}\n${venueInfo.address}` //\n${venueInfo.mapUrl}
             : session.location;
 
+        const formattedStart = formatTime12Hour(s.start_time);
+        const formattedEnd = formatTime12Hour(s.end_time);
+        const displayTime = (s.start_time && s.end_time) ? `${formattedStart} - ${formattedEnd}` : s.time;    
 
-        let msg = `🏸 *BADMINTON*\n📅 *Date:* ${formatDateWithDay(s.date)}\n⏰ *Time:* ${s.time}\n📍 *Loc:* ${locationDetails}\n💰 *Fee:* ${s.fee}\n🏦 *Pay to:* \n${s.payment_method || 'Contact Admin'}\n\n*Confirmed:*\n${pList || '_None_'}${wList}\n\n${instruction}`;
+        let msg = `🏸 *BADMINTON*\n📅 *Date:* ${formatDateWithDay(s.date)}\n⏰ *Time:* ${displayTime}\n📍 *Loc:* ${locationDetails}\n💰 *Fee:* ${s.fee}\n🏦 *Pay to:* \n${s.payment_method || 'Contact Admin'}\n\n*Confirmed:*\n${pList || '_None_'}${wList}\n\n${instruction}`;
 
         // --- ADD THE DEFAULT FOOTER HERE ---
         msg += `\n\nClick the link below to join or drop from session:\n${window.location.origin}${window.location.pathname}?session=${s.id}`;
@@ -1297,7 +1319,12 @@ function renderPlayerRow(p, s) {
 
                 document.getElementById('edit-id').value = s.id;
                 document.getElementById('f-date').value = s.date;
-                document.getElementById('f-time').value = s.time;
+
+
+                //document.getElementById('f-time').value = s.time;
+                document.getElementById('f-start-time').value = s.start_time || '';
+                document.getElementById('f-end-time').value = s.end_time || '';
+
                 document.getElementById('f-loc-text').value = s.location;
                 document.getElementById('f-cap').value = s.capacity;
                 document.getElementById('f-fee').value = s.fee;
@@ -1318,7 +1345,7 @@ function renderPlayerRow(p, s) {
             document.getElementById('f-loc-select').classList.remove('hidden');
             document.getElementById('f-loc-text').classList.add('hidden');
             document.getElementById('editor-title').innerText = "New Session";
-            ['f-date', 'f-time', 'f-loc-text', 'f-cap', 'f-fee', 'f-notes','f-payment-method','f-instruction'].forEach(i => {
+            ['f-date', 'f-start-time', 'f-end-time', 'f-loc-text', 'f-cap', 'f-fee', 'f-notes','f-payment-method','f-instruction'].forEach(i => {
                 document.getElementById(i).value = "";
             });
             setupVenueDropdown();
@@ -1361,12 +1388,17 @@ function renderPlayerRow(p, s) {
             }
             finalLocation = venueDetail.name;
         }
+
+        const startTimeVal = document.getElementById('f-start-time').value;
+        const endTimeVal = document.getElementById('f-end-time').value;
     
         const isVisibleValue = document.getElementById('f-visible').value === "true";
 
         const sData = { 
             date: document.getElementById('f-date').value, 
             time: document.getElementById('f-time').value, 
+            start_time: startTimeVal,
+            end_time: endTimeVal,
             location: finalLocation, // Now correctly handles both modes
             capacity: parseInt(document.getElementById('f-cap').value), 
             fee: document.getElementById('f-fee').value,

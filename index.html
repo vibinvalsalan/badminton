@@ -1605,7 +1605,7 @@ function renderPlayerRow(p, s) {
                 const { data, error } = await _supabase
                     .from('view_attendance_infractions')
                     .select('*')
-                    .order('session_date', { ascending: false });
+                    .order('time_of_reporting', { ascending: false });
 
                 if (error) throw error;
 

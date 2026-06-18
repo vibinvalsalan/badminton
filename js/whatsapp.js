@@ -27,6 +27,11 @@ export function copyToWhatsApp() {
 
     let msg = `🏸 *BADMINTON*\n📅 *Date:* ${formatDateWithDay(s.date)}\n⏰ *Time:* ${displayTime}\n📍 *Loc:* ${locationDetails}\n💰 *Fee:* ${s.fee}\n🏦 *Pay to:* \n${s.payment_method || 'Contact Admin'}\n\n*Confirmed:*\n${pList || '_None_'}${wList}\n\n${instruction}`;
 
-    msg += `\n\nClick the link below to join or drop from session:\n${window.location.origin}/session.html?session=${s.id}`;
+    // Build the link relative to this page's own directory, so it works
+    // whether the site is served from a domain root or from a GitHub Pages
+    // project subpath like /badminton/. session.html is always a sibling
+    // of whichever page calls this function.
+    const basePath = window.location.pathname.replace(/[^/]*$/, '');
+    msg += `\n\nClick the link below to join or drop from session:\n${window.location.origin}${basePath}session.html?session=${s.id}`;
     navigator.clipboard.writeText(msg).then(() => Swal.fire({ toast: true, position: 'top', icon: 'success', title: 'Copied to clipboard!', showConfirmButton: false, timer: 1500 }));
 }

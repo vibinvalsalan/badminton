@@ -58,8 +58,11 @@
         function openNativeShare() {
             const s = state.allData.find(x => x.id === state.currentSessionId);
             if (!s) return;
-            // Link points to session.html (not index.html as in the original SPA)
-            const directLink = `${window.location.origin}/session.html?session=${s.id}`;
+            // Build the link relative to this page's own directory, so it
+            // works whether the site is served from a domain root or from
+            // a GitHub Pages project subpath like /badminton/.
+            const basePath = window.location.pathname.replace(/[^/]*$/, '');
+            const directLink = `${window.location.origin}${basePath}session.html?session=${s.id}`;
 
             if (navigator.share) {
                 navigator.share({

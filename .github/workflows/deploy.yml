@@ -28,7 +28,9 @@ jobs:
       - name: Inject Build Number
         run: |
           # This replaces the placeholder with the actual GitHub run number
-          sed -i "s/#BUILD_NUMBER#/${{ github.run_number }}/g" index.html  
+          # in every HTML file in the repo, not just index.html
+          find . -name "*.html" -type f -exec \
+            sed -i "s/#BUILD_NUMBER#/${{ github.run_number }}/g" {} +
 
       - name: Inject Secrets
         run: |

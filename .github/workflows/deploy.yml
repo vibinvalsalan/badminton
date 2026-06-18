@@ -38,7 +38,7 @@ jobs:
       - name: Replace placeholders with real secrets
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: |
           # Replace tokens in every HTML file in the repo
           find . -name "*.html" -o -name "*.js" -type f -exec \

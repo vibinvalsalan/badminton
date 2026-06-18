@@ -35,6 +35,15 @@ jobs:
           sed -i "s|VITE_SUPABASE_URL|${{ secrets.SUPABASE_URL }}|g" index.html
           sed -i "s|VITE_SUPABASE_KEY|${{ secrets.SUPABASE_KEY }}|g" index.html
 
+      - name: Replace placeholders with real secrets
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          # Replace tokens in every HTML file in the repo
+          find . -name "*.html" -o -name "*.js" -type f -exec \
+            sed -i "s|VITE_SUPABASE_URL|${SUPABASE_URL}|g; s|VITE_SUPABASE_KEY|${SUPABASE_KEY}|g; s|#BUILD_NUMBER#|${{ github.run_number }}|g" {} +    
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
 

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+    <title>Admin Dashboard | Badminton Manager Pro</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        .animate-fadeIn { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans text-gray-900">
+
+    <nav class="bg-blue-600 text-white p-4 shadow-lg sticky top-0 z-50 flex justify-between items-center">
+        <div class="flex items-center gap-3">
+            <a href="index.html" class="p-1 hover:bg-blue-700 rounded-full transition-colors">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+            </a>
+            <h1 class="font-black tracking-tight text-lg uppercase">Admin Dashboard</h1>
+        </div>
+        <button id="logout-btn" class="text-[10px] font-black bg-blue-800 px-3 py-1.5 rounded-lg uppercase tracking-widest">Logout</button>
+    </nav>
+
+    <div class="container mx-auto p-4 max-w-lg">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-2xl font-black">Admin Menu</h2>
+            <span id="admin-display-name" class="text-[10px] font-bold uppercase tracking-widest text-blue-500"></span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+            <a href="admin-sessions.html?tab=active" class="bg-white border border-gray-100 p-4 rounded-3xl shadow-sm text-left flex flex-col justify-between h-32">
+                <span class="text-xl">🏸</span>
+                <div>
+                    <h3 class="font-black text-gray-800 text-sm leading-tight">Active Sessions</h3>
+                    <p class="text-[9px] text-gray-400 uppercase font-bold">Upcoming</p>
+                </div>
+            </a>
+
+            <a href="admin-sessions.html?tab=past" class="bg-white border border-gray-100 p-4 rounded-3xl shadow-sm text-left flex flex-col justify-between h-32">
+                <span class="text-xl">📅</span>
+                <div>
+                    <h3 class="font-black text-gray-800 text-sm leading-tight">Past Sessions</h3>
+                    <p class="text-[9px] text-gray-400 uppercase font-bold">History</p>
+                </div>
+            </a>
+
+            <a href="admin-players.html" class="bg-white border border-gray-100 p-4 rounded-3xl shadow-sm text-left flex flex-col justify-between h-32">
+                <span class="text-xl">👥</span>
+                <div>
+                    <h3 class="font-black text-gray-800 text-sm leading-tight">Player List</h3>
+                    <p class="text-[9px] text-gray-400 uppercase font-bold">Edit Names</p>
+                </div>
+            </a>
+
+            <a href="stats.html" class="bg-white border border-gray-100 p-4 rounded-3xl shadow-sm text-left flex flex-col justify-between h-32 border-blue-100 bg-blue-50/30">
+                <span class="text-xl">📊</span>
+                <div>
+                    <h3 class="font-black text-gray-800 text-sm leading-tight">Player Stats</h3>
+                    <p class="text-[9px] text-blue-500 uppercase font-bold">Participation</p>
+                </div>
+            </a>
+
+            <a href="admin-infractions.html" class="col-span-2 bg-white border border-red-100 bg-red-50/5 p-4 rounded-3xl shadow-sm text-left flex justify-between items-center transition-all hover:bg-red-50/20">
+                <div>
+                    <h3 class="font-black text-gray-800 text-sm">Attendance Infractions</h3>
+                    <p class="text-[9px] text-red-500 uppercase font-bold">No Shows, Drop Outs &amp; Late Payments</p>
+                </div>
+                <span class="text-gray-300">→</span>
+            </a>
+
+            <a href="admin-audit.html" class="col-span-2 bg-white border border-gray-100 p-4 rounded-3xl shadow-sm text-left flex justify-between items-center mt-2">
+                <div><h3 class="font-black text-gray-800 text-sm">System Audit History</h3><p class="text-[9px] text-gray-400 uppercase font-bold">Logs</p></div>
+                <span class="text-gray-300">→</span>
+            </a>
+        </div>
+    </div>
+
+    <script type="module">
+        import { requireAdmin, logoutAdmin } from './js/auth-guard.js';
+        import { state } from './js/state.js';
+
+        if (requireAdmin()) {
+            document.getElementById('admin-display-name').innerText = state.adminName;
+        }
+
+        document.getElementById('logout-btn').addEventListener('click', logoutAdmin);
+    </script>
+</body>
+</html>

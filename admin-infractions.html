@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+    <title>Attendance Infractions | Admin | Badminton Manager Pro</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        .animate-fadeIn { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans text-gray-900">
+
+    <nav class="bg-blue-600 text-white p-4 shadow-lg sticky top-0 z-50 flex items-center gap-3">
+        <a href="admin.html" class="p-1 hover:bg-blue-700 rounded-full transition-colors">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+        </a>
+        <h1 class="font-black tracking-tight text-lg uppercase">Attendance Tracker</h1>
+    </nav>
+
+    <div class="container mx-auto p-4 max-w-lg space-y-4 animate-fadeIn">
+        <div class="flex justify-between items-center mb-2">
+            <h2 class="text-xl font-black uppercase tracking-tight text-gray-900">Attendance Tracker</h2>
+            <span class="text-[10px] bg-red-100 text-red-600 px-2 py-1 rounded-lg font-bold tracking-wide">ANALYTICS</span>
+        </div>
+
+        <button id="open-manual-modal-btn" class="w-full bg-gray-900 hover:bg-gray-800 text-white font-black uppercase tracking-wider text-xs py-3 px-4 rounded-2xl shadow-sm flex justify-center items-center gap-2 mb-2 transition-all">
+            <span>➕</span> Log Manual Attendance Event
+        </button>
+
+        <div class="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm space-y-3">
+            <div class="grid grid-cols-2 gap-2">
+                <div>
+                    <label class="text-[9px] font-black text-gray-400 uppercase ml-1">From Date</label>
+                    <input type="date" id="inf-from-date" class="w-full bg-gray-50 p-2.5 rounded-xl border-none ring-1 ring-gray-200 outline-none text-xs">
+                </div>
+                <div>
+                    <label class="text-[9px] font-black text-gray-400 uppercase ml-1">To Date</label>
+                    <input type="date" id="inf-to-date" class="w-full bg-gray-50 p-2.5 rounded-xl border-none ring-1 ring-gray-200 outline-none text-xs">
+                </div>
+            </div>
+            <div>
+                <label class="text-[9px] font-black text-gray-400 uppercase ml-1">Infraction Type Filter</label>
+                <select id="inf-type-select" class="w-full bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 outline-none text-xs font-bold text-gray-700">
+                    <option value="ALL">Show All Categories</option>
+                    <option value="Late Payment">Late Payment</option>
+                    <option value="On Time Payment">On Time Payment</option>
+                    <option value="No Show">No Show</option>
+                    <option value="Drop Out">Drop Out</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+            <div class="bg-white border border-gray-100 p-3 rounded-2xl shadow-sm text-center">
+                <p class="text-[9px] font-bold text-gray-400 uppercase tracking-wide">Records Shown</p>
+                <span id="stat-inf-count" class="text-xl font-black text-blue-600">0</span>
+            </div>
+            <div class="bg-white border border-gray-100 p-3 rounded-2xl shadow-sm text-center">
+                <p class="text-[9px] font-bold text-gray-400 uppercase tracking-wide">Infraction Ratio</p>
+                <span id="stat-inf-pct" class="text-xl font-black text-red-500">0%</span>
+            </div>
+        </div>
+
+        <div id="list-infractions" class="space-y-2 max-h-[450px] overflow-y-auto pr-1"></div>
+    </div>
+
+    <script type="module">
+        import { requireAdmin } from './js/auth-guard.js';
+        import { _supabase } from './js/supabase-client.js';
+        import { state } from './js/state.js';
+        import { loadData } from './js/data.js';
+        import { formatDateWithDay, formatTime12Hour } from './js/format.js';
+
+        if (!requireAdmin()) throw new Error('Not authenticated');
+
+        let allInfractions = [];
+
+        async function fetchInfractionsData() {
+            const container = document.getElementById('list-infractions');
+            container.innerHTML = `<p class="text-center text-[10px] text-gray-400 font-bold uppercase py-6 animate-pulse">Loading tracker data...</p>`;
+
+            try {
+                const { data, error } = await _supabase
+                    .from('view_attendance_infractions')
+                    .select('*')
+                    .order('session_date', { ascending: false });
+
+                if (error) throw error;
+
+                allInfractions = data || [];
+                filterInfractions();
+            } catch (err) {
+                console.error("View Fetch Error:", err.message);
+                container.innerHTML = `<p class="text-center text-xs text-red-500 font-bold p-4">Error loading data view.</p>`;
+            }
+        }
+
+        function filterInfractions() {
+            const fromDateVal = document.getElementById('inf-from-date').value;
+            const toDateVal = document.getElementById('inf-to-date').value;
+            const typeFilter = document.getElementById('inf-type-select').value;
+
+            const startBound = fromDateVal ? new Date(fromDateVal).setHours(0, 0, 0, 0) : null;
+            const endBound = toDateVal ? new Date(toDateVal).setHours(23, 59, 59, 999) : null;
+
+            const filtered = allInfractions.filter(item => {
+                if (!item.session_date) return false;
+                const targetDate = new Date(item.session_date).setHours(0, 0, 0, 0);
+
+                if (startBound && targetDate < startBound) return false;
+                if (endBound && targetDate > endBound) return false;
+                if (typeFilter !== 'ALL' && item.infraction_type !== typeFilter) return false;
+
+                return true;
+            });
+
+            const totalSelected = filtered.length;
+            const totalInfractionsOnly = filtered.filter(i => i.infraction_type !== 'On Time Payment').length;
+            const ratioPercentage = totalSelected > 0 ? Math.round((totalInfractionsOnly / totalSelected) * 100) : 0;
+
+            document.getElementById('stat-inf-count').innerText = totalSelected;
+            document.getElementById('stat-inf-pct').innerText = `${ratioPercentage}%`;
+
+            renderInfractionsUiList(filtered);
+        }
+
+        function renderInfractionsUiList(records) {
+            const container = document.getElementById('list-infractions');
+
+            if (records.length === 0) {
+                container.innerHTML = `<p class="text-center text-gray-400 italic py-8 text-xs">No records matching those parameters.</p>`;
+                return;
+            }
+
+            container.innerHTML = records.map(record => {
+                let badgeStyle = "bg-gray-100 text-gray-700 border-gray-200";
+                let icon = "📋";
+
+                if (record.infraction_type === 'Late Payment') {
+                    badgeStyle = "bg-amber-50 text-amber-700 border-amber-200";
+                    icon = "⏰";
+                } else if (record.infraction_type === 'No Show' || record.infraction_type === 'Drop Out') {
+                    badgeStyle = "bg-red-50 text-red-700 border-red-200";
+                    icon = "❌";
+                } else if (record.infraction_type === 'On Time Payment') {
+                    badgeStyle = "bg-green-50 text-green-700 border-green-200";
+                    icon = "⚡";
+                }
+
+                const formattedDate = formatDateWithDay(record.session_date);
+                const timeDisplayString = record.session_start_time ? ` at ${formatTime12Hour(record.session_start_time)}` : '';
+
+                return `
+                    <div class="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm text-xs flex flex-col space-y-2 animate-fadeIn">
+                        <div class="flex justify-between items-center">
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-sm">${icon}</span>
+                                <span class="font-black text-gray-900 text-sm leading-none">${record.player_name || 'Unknown Player'}</span>
+                            </div>
+                            <span class="text-[9px] font-black border uppercase px-2 py-0.5 rounded-md ${badgeStyle}">
+                                ${record.infraction_type}
+                            </span>
+                            <button class="delete-infraction-btn text-gray-400 hover:text-red-500 text-sm p-1 transition-colors" data-id="${record.id}" title="Delete Record">
+                                🗑️
+                            </button>
+                        </div>
+
+                        <div class="bg-gray-50/60 p-2 rounded-xl border border-gray-50 text-[11px] text-gray-600">
+                            <p><strong>Session:</strong> ${formattedDate}${timeDisplayString}</p>
+                            <p class="mt-1 text-gray-500 italic">"${record.reason || 'No additional details provided.'}"</p>
+                        </div>
+
+                        <div class="text-[9px] text-gray-300 font-bold uppercase tracking-wider text-right">
+                            Reported: ${new Date(record.time_of_reporting).toLocaleDateString()} ${new Date(record.time_of_reporting).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            document.querySelectorAll('.delete-infraction-btn').forEach(btn =>
+                btn.addEventListener('click', () => deleteInfractionRecord(btn.dataset.id)));
+        }
+
+        async function deleteInfractionRecord(id) {
+            if (!id) return;
+
+            const result = await Swal.fire({
+                title: 'Delete Record?',
+                text: 'Are you sure you want to remove this attendance event record? This action cannot be undone.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#6b7280',
+                confirmButtonText: 'Yes, delete it',
+                cancelButtonText: 'Cancel'
+            });
+
+            if (!result.isConfirmed) return;
+
+            try {
+                const { error } = await _supabase
+                    .from('attendance_infractions')
+                    .delete()
+                    .eq('id', id);
+
+                if (error) throw error;
+
+                Swal.fire({
+                    toast: true, position: 'top', icon: 'success',
+                    title: 'Record deleted successfully', showConfirmButton: false, timer: 1500
+                });
+
+                await fetchInfractionsData();
+            } catch (err) {
+                console.error("Deletion Error:", err.message);
+                Swal.fire('Error', `Failed to delete record: ${err.message}`, 'error');
+            }
+        }
+
+        async function openManualInfractionModal() {
+            let playerOpts = [];
+            try {
+                const { data: pData } = await _supabase.from('players').select('id, name').order('name');
+                playerOpts = pData || [];
+            } catch (e) { console.error(e); }
+
+            const sessionOpts = (state.allData || []).map(s => {
+                const timeTag = (s.start_time && s.end_time) ? ` (${formatTime12Hour(s.start_time)})` : '';
+                return { id: String(s.id), label: `${s.date}${timeTag} - ${s.location || 'TBA'}` };
+            });
+
+            if (playerOpts.length === 0 || sessionOpts.length === 0) {
+                Swal.fire('Notice', 'Cannot open form: Ensure you have loaded active sessions and players first.', 'info');
+                return;
+            }
+
+            const playerSelectHtml = playerOpts.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+            const sessionSelectHtml = sessionOpts.map(s => `<option value="${s.id}">${s.label}</option>`).join('');
+
+            const { value: formValues } = await Swal.fire({
+                title: '✏️ LOG ATTENDANCE EVENT',
+                html: `
+                    <div class="text-left space-y-3 font-sans text-xs">
+                        <div>
+                            <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Select Player</label>
+                            <select id="swal-inf-player" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 outline-none font-bold text-gray-700">${playerSelectHtml}</select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Select Target Session</label>
+                            <select id="swal-inf-session" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 outline-none font-medium text-gray-700">${sessionSelectHtml}</select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Infraction Category</label>
+                            <select id="swal-inf-type" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 outline-none font-bold text-red-600">
+                                <option value="No Show">❌ No Show</option>
+                                <option value="Drop Out">🚪 Drop Out</option>
+                                <option value="Late Payment">⏰ Late Payment</option>
+                                <option value="On Time Payment">⚡ On Time Payment</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Reason / Admin Note</label>
+                            <textarea id="swal-inf-reason" placeholder="e.g., Cancelled 30 mins before start time without finding sub." class="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 outline-none h-16 text-gray-600 resize-none"></textarea>
+                        </div>
+                    </div>
+                `,
+                focusConfirm: false,
+                showCancelButton: true,
+                confirmButtonText: 'Save Record',
+                confirmButtonColor: '#111827',
+                preConfirm: () => {
+                    return {
+                        player_id: document.getElementById('swal-inf-player').value,
+                        session_id: document.getElementById('swal-inf-session').value,
+                        infraction_type: document.getElementById('swal-inf-type').value,
+                        reason: document.getElementById('swal-inf-reason').value
+                    };
+                }
+            });
+
+            if (!formValues) return;
+
+            try {
+                const { error } = await _supabase
+                    .from('attendance_infractions')
+                    .insert([{
+                        player_id: parseInt(formValues.player_id),
+                        session_id: formValues.session_id,
+                        infraction_type: formValues.infraction_type,
+                        reason: formValues.reason || 'Manually logged by Admin.',
+                        time_of_reporting: new Date().toISOString()
+                    }]);
+
+                if (error) throw error;
+
+                Swal.fire({
+                    toast: true, position: 'top', icon: 'success',
+                    title: 'Event logged successfully!', showConfirmButton: false, timer: 1500
+                });
+
+                await fetchInfractionsData();
+            } catch (err) {
+                console.error("Manual Creation Error:", err.message);
+                Swal.fire('Error', `Failed to write event: ${err.message}`, 'error');
+            }
+        }
+
+        document.getElementById('inf-from-date').addEventListener('change', filterInfractions);
+        document.getElementById('inf-to-date').addEventListener('change', filterInfractions);
+        document.getElementById('inf-type-select').addEventListener('change', filterInfractions);
+        document.getElementById('open-manual-modal-btn').addEventListener('click', openManualInfractionModal);
+
+        (async () => {
+            const today = new Date();
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(today.getDate() - 30);
+
+            document.getElementById('inf-from-date').value = thirtyDaysAgo.toISOString().split('T')[0];
+            document.getElementById('inf-to-date').value = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0];
+
+            await loadData(); // needed so openManualInfractionModal can list sessions
+            await fetchInfractionsData();
+        })();
+    </script>
+</body>
+</html>

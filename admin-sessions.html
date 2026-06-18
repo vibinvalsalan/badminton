@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+    <title>Sessions | Admin | Badminton Manager Pro</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        .animate-fadeIn { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans text-gray-900">
+
+    <nav class="bg-blue-600 text-white p-4 shadow-lg sticky top-0 z-50 flex justify-between items-center">
+        <div class="flex items-center gap-3">
+            <a href="admin.html" class="p-1 hover:bg-blue-700 rounded-full transition-colors">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+            </a>
+            <h1 class="font-black tracking-tight text-lg uppercase" id="nav-title">Sessions</h1>
+        </div>
+    </nav>
+
+    <div class="container mx-auto p-4 max-w-lg">
+
+        <div class="flex bg-gray-100 p-1 rounded-xl gap-1 mb-4">
+            <button id="tab-active" class="flex-1 text-xs font-black py-2 rounded-lg uppercase tracking-wide transition-all">Active</button>
+            <button id="tab-past" class="flex-1 text-xs font-black py-2 rounded-lg uppercase tracking-wide transition-all">Past</button>
+        </div>
+
+        <div id="admin-active-list" class="space-y-4">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-black">Active Sessions</h2>
+                <button id="new-session-btn" class="bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-bold">+ New</button>
+            </div>
+            <div id="list-active" class="space-y-3"></div>
+        </div>
+
+        <div id="admin-past-list" class="hidden space-y-4">
+            <h2 class="text-xl font-black mb-4">Past Sessions</h2>
+            <div id="list-past" class="space-y-3"></div>
+        </div>
+
+        <div id="admin-editor" class="hidden animate-fadeIn bg-white p-6 rounded-3xl shadow-xl space-y-4 border border-gray-100 mt-4">
+            <div class="flex justify-between items-center mb-2">
+                <h2 id="editor-title" class="text-xl font-black tracking-tight uppercase">Session Editor</h2>
+                <span class="text-[10px] bg-blue-100 text-blue-600 px-2 py-1 rounded-lg font-bold">ADMIN ONLY</span>
+            </div>
+
+            <input type="hidden" id="edit-id">
+
+            <div class="grid grid-cols-1 gap-4">
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Date</label>
+                        <input type="date" id="f-date" class="w-full bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Session Duration</label>
+                        <div class="flex items-center gap-2">
+                            <input type="time" id="f-start-time" class="w-1/2 bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm transition-all">
+                            <span class="text-xs font-bold text-gray-400 uppercase">to</span>
+                            <input type="time" id="f-end-time" class="w-1/2 bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm transition-all">
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Location</label>
+                    <select id="f-loc-select" class="w-full bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold"></select>
+                    <input type="text" id="f-loc-text" class="hidden w-full bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                </div>
+
+                <div class="grid grid-cols-1 gap-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Capacity</label>
+                            <input type="number" id="f-cap" class="w-full bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Fee</label>
+                            <input type="text" id="f-fee" class="w-full bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                        </div>
+                        <div class="mt-4">
+                            <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Session Status</label>
+                            <select id="f-status" class="w-full bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold">
+                                <option value="Scheduled">Scheduled</option>
+                                <option value="Completed">Completed</option>
+                                <option value="Cancelled">Cancelled</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Payment Details (WhatsApp)</label>
+                        <textarea id="f-payment-method" rows="2"
+                            placeholder="e.g. Bank: Monzo | Acc: 12345678"
+                            class="w-full bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"></textarea>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Session Visibility</label>
+                    <select id="f-visible" class="w-full bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm font-bold">
+                        <option value="true">Public (Visible to Players)</option>
+                        <option value="false">Private (Hidden / Draft)</option>
+                    </select>
+                    <p class="text-[9px] text-gray-400 mt-1 ml-1">Private sessions are only visible in the Admin Dashboard.</p>
+                </div>
+
+                <div>
+                    <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Internal Admin Notes</label>
+                    <textarea id="f-notes" rows="2"
+                        class="w-full bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"
+                        placeholder="Private notes (e.g. Court numbers, specific reminders)..."></textarea>
+                </div>
+                <div>
+                    <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Special Instruction (Public)</label>
+                    <textarea id="f-instruction" rows="2"
+                        placeholder="e.g. Arrive 5 minutes before&#10;Session Start time"
+                        class="w-full bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"></textarea>
+                </div>
+            </div>
+
+            <div class="flex gap-3 pt-2">
+                <button id="cancel-editor-btn" class="w-1/3 bg-gray-100 text-gray-600 font-black py-4 rounded-2xl hover:bg-gray-200 transition-colors uppercase tracking-widest text-[11px]">Cancel</button>
+                <button id="save-session-btn" class="w-2/3 bg-blue-600 text-white font-black py-4 rounded-2xl shadow-lg hover:bg-blue-700 transition-all uppercase tracking-widest text-[11px]">Save Session</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { requireAdmin } from './js/auth-guard.js';
+        import { _supabase } from './js/supabase-client.js';
+        import { state, VENUES } from './js/state.js';
+        import { loadData } from './js/data.js';
+        import { formatDateWithDay, formatTime12Hour } from './js/format.js';
+        import { logAction } from './js/audit.js';
+
+        if (!requireAdmin()) {
+            // requireAdmin() already redirected; stop here.
+            throw new Error('Not authenticated');
+        }
+
+        const activeListEl = document.getElementById('admin-active-list');
+        const pastListEl = document.getElementById('admin-past-list');
+        const editorEl = document.getElementById('admin-editor');
+        const tabActiveBtn = document.getElementById('tab-active');
+        const tabPastBtn = document.getElementById('tab-past');
+
+        function setTab(tab) {
+            const isActive = tab === 'active';
+
+            // Only toggle list visibility if the editor isn't currently open
+            // (closeEditor() is responsible for restoring the right list).
+            if (editorEl.classList.contains('hidden')) {
+                activeListEl.classList.toggle('hidden', !isActive);
+                pastListEl.classList.toggle('hidden', isActive);
+            }
+
+            tabActiveBtn.classList.toggle('bg-white', isActive);
+            tabActiveBtn.classList.toggle('shadow-sm', isActive);
+            tabPastBtn.classList.toggle('bg-white', !isActive);
+            tabPastBtn.classList.toggle('shadow-sm', !isActive);
+
+            const url = new URL(window.location);
+            url.searchParams.set('tab', tab);
+            history.replaceState(null, '', url);
+        }
+
+        tabActiveBtn.addEventListener('click', () => { closeEditor(); setTab('active'); });
+        tabPastBtn.addEventListener('click', () => { closeEditor(); setTab('past'); });
+
+        function renderAdminLists() {
+            const activeContainer = document.getElementById('list-active');
+            const pastContainer = document.getElementById('list-past');
+            const today = new Date().setHours(0, 0, 0, 0);
+
+            activeContainer.innerHTML = '';
+            pastContainer.innerHTML = '';
+
+            state.allData.sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(s => {
+                const isPast = new Date(s.date).setHours(0, 0, 0, 0) < today;
+                const target = isPast ? pastContainer : activeContainer;
+
+                const detailTime = (s.start_time && s.end_time)
+                    ? `${formatTime12Hour(s.start_time)} - ${formatTime12Hour(s.end_time)}`
+                    : 'N/A';
+                const paidCount = s.players.filter(p => p.payment_status === 'Paid').length;
+                const item = document.createElement('div');
+                item.className = "bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex justify-between items-center mb-2";
+                item.innerHTML = `
+                    <div>
+                        <p class="text-xs font-bold ${isPast ? 'text-gray-400' : 'text-blue-600'}">${formatDateWithDay(s.date)}</p>
+                        <h4 class="font-black text-gray-800">
+                            ${detailTime}
+                            ${s.is_visible === false ? '<span class="ml-2 text-[8px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full uppercase tracking-wider font-black">Hidden</span>' : ''}
+                        </h4>
+                        <p class="text-[10px] text-gray-400 font-bold uppercase">${s.location} • Fee: ${s.fee} • Paid: ${paidCount}/${s.players.length}</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <a href="session.html?session=${s.id}" class="bg-blue-50 text-blue-700 font-bold text-[10px] px-3 py-2 rounded-xl">View</a>
+                        <button class="edit-session-btn bg-gray-50 text-gray-600 font-bold text-[10px] px-3 py-2 rounded-xl" data-id="${s.id}">Edit</button>
+                        <button class="delete-session-btn text-red-300 px-2" data-id="${s.id}">×</button>
+                    </div>`;
+                target.appendChild(item);
+            });
+
+            document.querySelectorAll('.edit-session-btn').forEach(btn =>
+                btn.addEventListener('click', () => showSessionForm(btn.dataset.id)));
+            document.querySelectorAll('.delete-session-btn').forEach(btn =>
+                btn.addEventListener('click', () => deleteSession(btn.dataset.id)));
+        }
+
+        function setupVenueDropdown() {
+            const select = document.getElementById('f-loc-select');
+            select.innerHTML = '<option value="" disabled selected>Select a venue</option>';
+            VENUES.forEach(v => {
+                let opt = document.createElement('option');
+                opt.value = v.id;
+                opt.innerHTML = v.name;
+                select.appendChild(opt);
+            });
+        }
+
+        function showSessionForm(id = null) {
+            activeListEl.classList.add('hidden');
+            pastListEl.classList.add('hidden');
+            editorEl.classList.remove('hidden');
+
+            const visibleSelect = document.getElementById('f-visible');
+
+            if (id) {
+                const s = state.allData.find(x => x.id === id);
+                if (s) {
+                    document.getElementById('f-loc-select').classList.add('hidden');
+                    document.getElementById('f-loc-text').classList.remove('hidden');
+
+                    document.getElementById('edit-id').value = s.id;
+                    document.getElementById('f-date').value = s.date;
+                    document.getElementById('f-start-time').value = s.start_time || '';
+                    document.getElementById('f-end-time').value = s.end_time || '';
+                    document.getElementById('f-loc-text').value = s.location;
+                    document.getElementById('f-cap').value = s.capacity;
+                    document.getElementById('f-fee').value = s.fee;
+                    document.getElementById('f-notes').value = s.admin_notes || '';
+                    document.getElementById('f-payment-method').value = s.payment_method || '';
+                    document.getElementById('f-instruction').value = s.special_instruction || '';
+                    document.getElementById('f-status').value = s.status || 'Scheduled';
+                    visibleSelect.value = (s.is_visible !== false) ? "true" : "false";
+                    document.getElementById('editor-title').innerText = "Edit Session";
+                }
+            } else {
+                document.getElementById('edit-id').value = "";
+                visibleSelect.value = "true";
+                document.getElementById('f-loc-select').classList.remove('hidden');
+                document.getElementById('f-loc-text').classList.add('hidden');
+                document.getElementById('editor-title').innerText = "New Session";
+                ['f-date', 'f-start-time', 'f-end-time', 'f-loc-text', 'f-cap', 'f-fee', 'f-notes', 'f-payment-method', 'f-instruction'].forEach(i => {
+                    document.getElementById(i).value = "";
+                });
+                setupVenueDropdown();
+            }
+        }
+
+        function closeEditor() {
+            editorEl.classList.add('hidden');
+            const tab = new URLSearchParams(window.location.search).get('tab') || 'active';
+            activeListEl.classList.toggle('hidden', tab !== 'active');
+            pastListEl.classList.toggle('hidden', tab === 'active');
+        }
+
+        async function saveSession() {
+            const sessionId = document.getElementById('edit-id').value;
+            let finalLocation = "";
+
+            if (sessionId) {
+                finalLocation = document.getElementById('f-loc-text').value;
+            } else {
+                const selectedId = document.getElementById('f-loc-select').value;
+                const venueDetail = VENUES.find(v => v.id === selectedId);
+                if (!venueDetail) {
+                    Swal.fire('Error', 'Please select a venue!', 'error');
+                    return;
+                }
+                finalLocation = venueDetail.name;
+            }
+
+            const startTimeVal = document.getElementById('f-start-time').value;
+            const endTimeVal = document.getElementById('f-end-time').value;
+            const isVisibleValue = document.getElementById('f-visible').value === "true";
+
+            const sData = {
+                date: document.getElementById('f-date').value,
+                start_time: startTimeVal,
+                end_time: endTimeVal,
+                location: finalLocation,
+                capacity: parseInt(document.getElementById('f-cap').value),
+                fee: document.getElementById('f-fee').value,
+                admin_notes: document.getElementById('f-notes').value,
+                is_visible: isVisibleValue,
+                payment_method: document.getElementById('f-payment-method').value,
+                special_instruction: document.getElementById('f-instruction').value,
+                status: document.getElementById('f-status').value,
+                is_deleted: false
+            };
+
+            let result;
+            let actionType;
+            let logMsg;
+            const currentAdmin = state.adminName || localStorage.getItem('adminName') || 'Admin';
+
+            if (sessionId) {
+                actionType = 'SESSION_UPDATED';
+                logMsg = `${currentAdmin} updated session on ${sData.date} (${sData.time})`;
+                result = await _supabase.from('sessions').update(sData).eq('id', sessionId).select().single();
+            } else {
+                actionType = 'SESSION_CREATED';
+                logMsg = `${currentAdmin} created a new session for ${sData.date} (${sData.time}) at ${sData.location}`;
+                result = await _supabase.from('sessions').insert([sData]).select().single();
+            }
+
+            if (!result.error) {
+                const targetId = sessionId || result.data.id;
+                await logAction(actionType, logMsg, currentAdmin, targetId);
+
+                closeEditor();
+                setTab('active');
+                await loadData();
+                renderAdminLists();
+
+                Swal.fire({
+                    icon: 'success',
+                    title: sessionId ? 'Session Updated' : 'Session Created',
+                    timer: 1500,
+                    showConfirmButton: false
+                });
+            } else {
+                Swal.fire('Error', 'Failed to save session', 'error');
+            }
+        }
+
+        async function deleteSession(id) {
+            const { isConfirmed } = await Swal.fire({
+                title: 'Delete Session?',
+                text: "This will hide the session from everyone. You can still recover it from the archive later.",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#6b7280',
+                confirmButtonText: 'Yes, delete it',
+                customClass: { popup: 'rounded-3xl' }
+            });
+
+            if (isConfirmed) {
+                const { error } = await _supabase
+                    .from('sessions')
+                    .update({ is_deleted: true })
+                    .eq('id', id);
+                const currentAdmin = state.adminName || localStorage.getItem('adminName') || 'Admin';
+                if (!error) {
+                    await logAction('SESSION_DELETED', `${currentAdmin} deleted session ID: ${id}`, 'System', id);
+                    Swal.fire({ toast: true, position: 'top', icon: 'success', title: 'Session deleted', showConfirmButton: false, timer: 1500 });
+                    await loadData();
+                    renderAdminLists();
+                } else {
+                    Swal.fire('Error', 'Could not delete session.', 'error');
+                }
+            }
+        }
+
+        document.getElementById('new-session-btn').addEventListener('click', () => showSessionForm());
+        document.getElementById('cancel-editor-btn').addEventListener('click', closeEditor);
+        document.getElementById('save-session-btn').addEventListener('click', saveSession);
+
+        // --- init ---
+        (async () => {
+            await loadData();
+            renderAdminLists();
+            const initialTab = new URLSearchParams(window.location.search).get('tab') || 'active';
+            setTab(initialTab);
+        })();
+    </script>
+</body>
+</html>

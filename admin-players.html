@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+    <title>Players | Admin | Badminton Manager Pro</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans text-gray-900">
+
+    <nav class="bg-blue-600 text-white p-4 shadow-lg sticky top-0 z-50 flex items-center gap-3">
+        <a href="admin.html" class="p-1 hover:bg-blue-700 rounded-full transition-colors">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+        </a>
+        <h1 class="font-black tracking-tight text-lg uppercase">Player List</h1>
+    </nav>
+
+    <div class="container mx-auto p-4 max-w-lg space-y-6">
+
+        <div id="player-manager-view" class="space-y-6">
+            <div class="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm space-y-4">
+                <p class="text-[10px] font-black text-gray-400 uppercase">Add New Player</p>
+                <div class="flex gap-2">
+                    <input type="text" id="new-player-name" placeholder="Full Name" class="flex-1 bg-gray-50 p-3 rounded-xl border border-gray-100 text-sm outline-none">
+                    <button id="add-player-btn" class="bg-blue-600 text-white px-5 rounded-xl font-bold text-sm">Add</button>
+                </div>
+            </div>
+            <div id="master-player-list" class="space-y-2"></div>
+        </div>
+
+        <div id="player-editor-view" class="hidden bg-white p-6 rounded-3xl shadow-xl space-y-4">
+            <h2 class="text-xl font-black">Edit Player</h2>
+            <input type="hidden" id="edit-player-id">
+            <div>
+                <label class="text-[10px] font-black text-gray-400 uppercase">Full Name</label>
+                <input type="text" id="edit-player-name" class="w-full bg-gray-50 p-3 rounded-xl border border-gray-100">
+            </div>
+            <div class="flex gap-2 pt-4">
+                <button id="cancel-player-edit-btn" class="w-1/3 bg-gray-100 font-bold p-4 rounded-2xl">Cancel</button>
+                <button id="save-player-edit-btn" class="w-2/3 bg-blue-600 text-white font-bold p-4 rounded-2xl shadow-lg">Update Name</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { requireAdmin } from './js/auth-guard.js';
+        import { _supabase } from './js/supabase-client.js';
+        import { state } from './js/state.js';
+        import { loadData } from './js/data.js';
+        import { logAction } from './js/audit.js';
+
+        if (!requireAdmin()) throw new Error('Not authenticated');
+
+        const managerView = document.getElementById('player-manager-view');
+        const editorView = document.getElementById('player-editor-view');
+
+        function showPlayerManager() {
+            editorView.classList.add('hidden');
+            managerView.classList.remove('hidden');
+            renderMasterPlayerList();
+        }
+
+        function renderMasterPlayerList() {
+            document.getElementById('master-player-list').innerHTML = state.masterPlayers.map(p => `
+                <div class="bg-white p-4 rounded-2xl border border-gray-100 flex justify-between items-center shadow-sm mb-2">
+                    <span class="font-bold text-gray-700">${p.name}</span>
+                    <div class="flex gap-2">
+                        <button class="edit-player-btn text-xs bg-gray-50 text-gray-600 px-3 py-1 rounded-lg font-bold uppercase" data-id="${p.id}" data-name="${p.name}">Edit</button>
+                        <button class="delete-player-btn text-red-300 px-2" data-id="${p.id}" data-name="${p.name}">×</button>
+                    </div>
+                </div>`).join('') || '<p class="text-center text-gray-400 italic">No players added yet.</p>';
+
+            document.querySelectorAll('.edit-player-btn').forEach(btn =>
+                btn.addEventListener('click', () => editPlayerForm(btn.dataset.id, btn.dataset.name)));
+            document.querySelectorAll('.delete-player-btn').forEach(btn =>
+                btn.addEventListener('click', () => deleteMasterPlayer(btn.dataset.id, btn.dataset.name)));
+        }
+
+        function editPlayerForm(id, name) {
+            managerView.classList.add('hidden');
+            editorView.classList.remove('hidden');
+            document.getElementById('edit-player-id').value = id;
+            document.getElementById('edit-player-name').value = name;
+        }
+
+        async function addMasterPlayer() {
+            const nameInput = document.getElementById('new-player-name');
+            const name = nameInput.value.trim();
+            if (!name) return;
+            await _supabase.from('players').insert([{ name }]);
+            nameInput.value = '';
+            await logAction('ADMIN_PLAYER_CREATED', `${state.adminName} created player ${name}`);
+            await loadData();
+            renderMasterPlayerList();
+        }
+
+        async function savePlayerUpdate() {
+            const id = document.getElementById('edit-player-id').value;
+            const newName = document.getElementById('edit-player-name').value.trim();
+            if (!newName) return;
+            await _supabase.from('players').update({ name: newName }).eq('id', id);
+            await _supabase.from('registrations').update({ player_name: newName }).eq('player_id', id);
+            await logAction('ADMIN_PLAYER_UPDATED', `${state.adminName} changed name to ${newName}`);
+            await loadData();
+            showPlayerManager();
+        }
+
+        async function deleteMasterPlayer(id, name) {
+            const { isConfirmed } = await Swal.fire({ title: 'Remove?', text: name, icon: 'warning', showCancelButton: true });
+            if (isConfirmed) {
+                await _supabase.from('players').delete().eq('id', id);
+                await logAction('ADMIN_PLAYER_DELETED', `${state.adminName} deleted ${name}`);
+                await loadData();
+                renderMasterPlayerList();
+            }
+        }
+
+        document.getElementById('add-player-btn').addEventListener('click', addMasterPlayer);
+        document.getElementById('cancel-player-edit-btn').addEventListener('click', showPlayerManager);
+        document.getElementById('save-player-edit-btn').addEventListener('click', savePlayerUpdate);
+
+        (async () => {
+            await loadData();
+            renderMasterPlayerList();
+        })();
+    </script>
+</body>
+</html>

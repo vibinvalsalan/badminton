@@ -224,6 +224,8 @@ export function filterPlayers(status) {
         container.innerHTML = filtered.map(p => renderPlayerRow(p, s)).join('');
     }
 }
+
+export async function promoteFromWaitlist(regId, sid, name, onComplete) {
     if (!state.isAdmin) {
         Swal.fire('Access Denied', 'Only admins can promote players.', 'error');
         return;

@@ -8,6 +8,7 @@
 import { _supabase } from './supabase-client.js';
 import { state } from './state.js';
 import { logAction } from './audit.js';
+import { formatTime12Hour, formatDateWithDay } from './format.js';
 
 export function renderPlayerRow(p, s) {
     return `
@@ -101,7 +102,128 @@ export async function handleRemoval(regId, sid, name, onComplete) {
     }
 }
 
-export async function promoteFromWaitlist(regId, sid, name, onComplete) {
+export async function joinSession(onComplete) {
+    const playerId = document.getElementById('join-player-id').value;
+    const player = state.masterPlayers.find(p => p.id == playerId);
+    const session = state.allData.find(s => s.id === state.currentSessionId);
+
+    if (!player || !session) return;
+
+    const isAlreadyRegistered = session.players.some(p => p.player_id == player.id);
+
+    if (isAlreadyRegistered) {
+        Swal.fire({
+            title: 'Already Registered',
+            text: `${player.name} is already on the list for this session!`,
+            icon: 'warning',
+            confirmButtonColor: '#2563eb',
+            customClass: { popup: 'rounded-3xl' }
+        });
+        return;
+    }
+
+    const status = session.players.length >= session.capacity ? 'Waitlist' : 'Confirmed';
+
+    const { error } = await _supabase.from('registrations').insert([{
+        session_id: session.id,
+        player_id: player.id,
+        player_name: player.name,
+        status: status,
+        payment_status: 'Unpaid'
+    }]);
+
+    const displayTime = (session.start_time && session.end_time)
+        ? `${formatTime12Hour(session.start_time)} - ${formatTime12Hour(session.end_time)}`
+        : 'N/A';
+
+    if (!error) {
+        const actionVerb = state.isAdmin ? `${state.adminName} added ${player.name} to` : `${player.name} joined`;
+        const logMessage = `${actionVerb} session on ${session.date} (${displayTime}), Status: ${status}`;
+        await logAction('PLAYER_JOINED_SESSION', logMessage, player.name, session.id);
+
+        const isConfirmed = status === 'Confirmed';
+        const modalIcon = isConfirmed ? 'success' : 'warning';
+        const footerText = isConfirmed
+            ? 'See you on the court!'
+            : 'You are now in the waiting list , Check again to see if a spot opens up!';
+
+        Swal.fire({
+            title: isConfirmed ? 'Booking Confirmed!' : 'Added to Waitlist',
+            html: `
+                <div class="text-left bg-gray-50 p-4 rounded-2xl mt-2 text-sm">
+                    <p class="mb-1"><strong>Player:</strong> ${player.name}</p>
+                    <p class="mb-1"><strong>Session:</strong> ${displayTime}</p>
+                    <p class="mb-1"><strong>Date:</strong> ${formatDateWithDay(session.date)}</p>
+                    <p><strong>Venue:</strong> ${session.location}</p>
+                </div>
+                <p class="mt-4 text-xs text-gray-400 font-bold uppercase tracking-widest">${footerText}</p>
+            `,
+            icon: modalIcon,
+            confirmButtonText: isConfirmed ? 'Great!' : 'Understood',
+            confirmButtonColor: '#2563eb',
+            customClass: {
+                popup: 'rounded-3xl',
+                confirmButton: 'rounded-xl px-8 py-3 uppercase font-black text-xs'
+            }
+        });
+
+        if (onComplete) await onComplete();
+    }
+}
+
+export function toggleJoinButton() {
+    const select = document.getElementById('join-player-id');
+    const btn = document.getElementById('join-btn');
+    const errorMsg = document.getElementById('join-error');
+
+    if (select.value) {
+        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+        btn.disabled = false;
+        select.classList.remove('border-red-500');
+        errorMsg.classList.add('hidden');
+    } else {
+        btn.classList.add('opacity-50', 'cursor-not-allowed');
+        btn.disabled = true;
+    }
+}
+
+export function validateAndJoin(onComplete) {
+    const select = document.getElementById('join-player-id');
+    if (!select.value) {
+        select.classList.add('border-red-500', 'animate-pulse');
+        document.getElementById('join-error').classList.remove('hidden');
+        setTimeout(() => select.classList.remove('animate-pulse'), 500);
+        return;
+    }
+    joinSession(onComplete);
+}
+
+export function filterPlayers(status) {
+    const s = state.allData.find(x => x.id === state.currentSessionId);
+    if (!s) return;
+
+    const types = ['all', 'paid', 'unpaid'];
+    types.forEach(type => {
+        const btn = document.getElementById(`btn-filter-${type}`);
+        if (!btn) return;
+        if (type === status.toLowerCase()) {
+            btn.classList.add('bg-white', 'shadow-sm');
+            btn.classList.remove('text-gray-500');
+        } else {
+            btn.classList.remove('bg-white', 'shadow-sm');
+            btn.classList.add('text-gray-500');
+        }
+    });
+
+    const filtered = status === 'all'
+        ? s.players
+        : s.players.filter(p => p.payment_status === status);
+
+    const container = document.getElementById('participants-list-container');
+    if (container) {
+        container.innerHTML = filtered.map(p => renderPlayerRow(p, s)).join('');
+    }
+}
     if (!state.isAdmin) {
         Swal.fire('Access Denied', 'Only admins can promote players.', 'error');
         return;

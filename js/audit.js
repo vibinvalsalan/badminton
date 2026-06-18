@@ -39,3 +39,43 @@ export async function logVisit() {
     await logAction('UNIQUE_ACCESS', details, 'Visitor', null);
     sessionStorage.setItem('access_logged', 'true');
 }
+
+export async function toggleSessionLogs(sid) {
+    const container = document.getElementById(`session-log-container-${sid}`);
+    const chevron = document.getElementById(`log-chevron-${sid}`);
+
+    if (!container.classList.contains('hidden')) {
+        container.classList.add('hidden');
+        chevron.innerText = "+ Show";
+        return;
+    }
+
+    container.classList.remove('hidden');
+    chevron.innerText = "- Hide";
+
+    const { data, error } = await _supabase
+        .from('audit_logs')
+        .select('*')
+        .eq('session_info', sid)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        container.innerHTML = `<p class="text-red-400 text-[10px]">Error loading logs.</p>`;
+        return;
+    }
+
+    if (!data || data.length === 0) {
+        container.innerHTML = `<p class="text-center text-gray-400 text-[10px] py-4 uppercase font-bold">No activity recorded yet</p>`;
+        return;
+    }
+
+    container.innerHTML = data.map(log => `
+        <div class="bg-gray-50 p-2.5 rounded-xl text-[10px] border border-gray-100">
+            <div class="flex justify-between mb-1">
+                <span class="font-black text-blue-500 uppercase">${log.action.replace(/_/g, ' ')}</span>
+                <span class="text-gray-300">${new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+            </div>
+            <p class="text-gray-600 leading-tight">${log.details}</p>
+        </div>
+    `).join('');
+}

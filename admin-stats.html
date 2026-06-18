@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+    <title>Player Stats | Admin | Badminton Manager Pro</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans text-gray-900">
+
+    <nav class="bg-blue-600 text-white p-4 shadow-lg sticky top-0 z-50 flex items-center gap-3">
+        <a href="admin.html" class="p-1 hover:bg-blue-700 rounded-full transition-colors">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+        </a>
+        <h1 class="font-black tracking-tight text-lg uppercase">Player Participation</h1>
+    </nav>
+
+    <div class="container mx-auto p-4 max-w-lg">
+        <div class="flex items-center mb-6">
+            <h2 class="text-xl font-black uppercase italic tracking-tighter">Player Stats</h2>
+        </div>
+
+        <div class="bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm">
+            <div id="stats-list" class="divide-y divide-gray-50"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { requireAdmin } from './js/auth-guard.js';
+        import { _supabase } from './js/supabase-client.js';
+        import { formatDateWithDay } from './js/format.js';
+
+        if (!requireAdmin()) throw new Error('Not authenticated');
+
+        async function renderPlayerStats() {
+            const statsList = document.getElementById('stats-list');
+            statsList.innerHTML = `<div class="p-8 text-center text-gray-400 font-bold uppercase text-[10px]">Loading...</div>`;
+
+            try {
+                const { data, error } = await _supabase
+                    .from('player_participation_stats')
+                    .select('*')
+                    .order('games_played', { ascending: false });
+
+                if (error) throw error;
+
+                statsList.innerHTML = data.map(s => `
+                    <div class="stats-row flex items-center justify-between p-5 border-b border-gray-50 hover:bg-blue-50 transition-all cursor-pointer group"
+                        data-player-id="${s.player_id}" data-player-name="${s.player_name}">
+                        <div class="flex flex-col">
+                            <span class="font-bold text-gray-800 group-hover:text-blue-600">${s.player_name}</span>
+                            <span class="text-[9px] text-gray-400 uppercase font-black tracking-widest">Click for history</span>
+                        </div>
+                        <div class="flex items-center bg-blue-50 px-4 py-2 rounded-2xl border border-blue-100 group-hover:bg-blue-600 group-hover:border-blue-600 transition-colors">
+                            <span class="text-sm font-black text-blue-600 mr-1 group-hover:text-white">${s.games_played}</span>
+                            <span class="text-[10px] font-black text-blue-400 uppercase group-hover:text-blue-100">Games</span>
+                        </div>
+                    </div>
+                `).join('');
+
+                document.querySelectorAll('.stats-row').forEach(row =>
+                    row.addEventListener('click', () => showPlayerHistory(row.dataset.playerId, row.dataset.playerName)));
+
+            } catch (err) {
+                console.error("Stats Error:", err);
+                statsList.innerHTML = `<div class="p-8 text-center text-red-500 font-bold">Error loading stats</div>`;
+            }
+        }
+
+        async function showPlayerHistory(playerId, playerName) {
+            Swal.fire({
+                title: playerName,
+                html: '<p class="text-xs text-gray-400 uppercase font-black mb-4">Loading Session History...</p><div id="history-loader" class="space-y-2"></div>',
+                showConfirmButton: false,
+                customClass: { popup: 'rounded-3xl' },
+                didOpen: async () => {
+                    Swal.showLoading();
+
+                    const { data, error } = await _supabase
+                        .from('player_session_history')
+                        .select('*')
+                        .eq('player_id', playerId)
+                        .order('session_date', { ascending: false });
+
+                    if (error || !data) {
+                        Swal.fire('Error', 'Could not load history', 'error');
+                        return;
+                    }
+
+                    const historyHtml = data.map(h => `
+                        <div class="flex justify-between items-center p-3 bg-gray-50 rounded-xl mb-2 text-left border border-gray-100">
+                            <div>
+                                <p class="text-[10px] font-black text-blue-600 uppercase leading-none">${formatDateWithDay(h.session_date)}</p>
+                                <p class="font-bold text-gray-800 text-sm mt-1">${h.session_time}</p>
+                            </div>
+                            <span class="text-[9px] font-bold text-gray-400 uppercase text-right max-w-[100px] truncate">${h.session_location}</span>
+                        </div>
+                    `).join('') || '<p class="text-gray-400 italic py-4">No completed sessions found.</p>';
+
+                    Swal.update({
+                        title: playerName,
+                        html: `
+                            <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Attendance Breakdown</p>
+                            <div class="max-h-[400px] overflow-y-auto pr-1">
+                                ${historyHtml}
+                            </div>
+                        `,
+                        showConfirmButton: true,
+                        confirmButtonText: 'Close',
+                        confirmButtonColor: '#2563eb'
+                    });
+                    Swal.hideLoading();
+                }
+            });
+        }
+
+        renderPlayerStats();
+    </script>
+</body>
+</html>

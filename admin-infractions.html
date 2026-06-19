@@ -52,7 +52,22 @@
                     <option value="Drop Out">Drop Out</option>
                 </select>
             </div>
+            <div>
+                <label class="text-[9px] font-black text-gray-400 uppercase ml-1">Search by Player</label>
+                <input type="text" id="inf-player-search" placeholder="Type a player name..."
+                    class="w-full bg-gray-50 p-2.5 rounded-xl border-none ring-1 ring-gray-200 outline-none text-xs">
+            </div>
+            <div>
+                <label class="text-[9px] font-black text-gray-400 uppercase ml-1">Search by Session</label>
+                <select id="inf-session-select" class="w-full bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 outline-none text-xs font-bold text-gray-700">
+                    <option value="ALL">All Sessions</option>
+                </select>
+            </div>
         </div>
+
+        <button id="clear-filters-btn" class="w-full text-[10px] font-black text-gray-400 uppercase tracking-widest py-1 hover:text-blue-600 transition-colors">
+            Clear All Filters
+        </button>
 
         <div class="grid grid-cols-2 gap-2">
             <div class="bg-white border border-gray-100 p-3 rounded-2xl shadow-sm text-center">
@@ -79,6 +94,22 @@
 
         let allInfractions = [];
 
+        // Builds {id, label} session options from currently loaded sessions.
+        // Shared by the session filter dropdown and the manual-log modal.
+        function getSessionOptions() {
+            return (state.allData || []).map(s => {
+                const timeTag = (s.start_time && s.end_time) ? ` (${formatTime12Hour(s.start_time)})` : '';
+                return { id: String(s.id), label: `${s.date}${timeTag} - ${s.location || 'TBA'}` };
+            }).sort((a, b) => new Date(b.date) - new Date(a.date));
+        }
+
+        function populateSessionFilterDropdown() {
+            const select = document.getElementById('inf-session-select');
+            const sessionOpts = getSessionOptions();
+            const optionsHtml = sessionOpts.map(s => `<option value="${s.id}">${s.label}</option>`).join('');
+            select.innerHTML = `<option value="ALL">All Sessions</option>${optionsHtml}`;
+        }
+
         async function fetchInfractionsData() {
             const container = document.getElementById('list-infractions');
             container.innerHTML = `<p class="text-center text-[10px] text-gray-400 font-bold uppercase py-6 animate-pulse">Loading tracker data...</p>`;
@@ -103,6 +134,8 @@
             const fromDateVal = document.getElementById('inf-from-date').value;
             const toDateVal = document.getElementById('inf-to-date').value;
             const typeFilter = document.getElementById('inf-type-select').value;
+            const playerSearchVal = document.getElementById('inf-player-search').value.trim().toLowerCase();
+            const sessionFilter = document.getElementById('inf-session-select').value;
 
             const startBound = fromDateVal ? new Date(fromDateVal).setHours(0, 0, 0, 0) : null;
             const endBound = toDateVal ? new Date(toDateVal).setHours(23, 59, 59, 999) : null;
@@ -114,6 +147,12 @@
                 if (startBound && targetDate < startBound) return false;
                 if (endBound && targetDate > endBound) return false;
                 if (typeFilter !== 'ALL' && item.infraction_type !== typeFilter) return false;
+
+                // Optional: player name search (case-insensitive substring match)
+                if (playerSearchVal && !(item.player_name || '').toLowerCase().includes(playerSearchVal)) return false;
+
+                // Optional: exact session match
+                if (sessionFilter !== 'ALL' && String(item.session_id) !== sessionFilter) return false;
 
                 return true;
             });
@@ -228,10 +267,7 @@
                 playerOpts = pData || [];
             } catch (e) { console.error(e); }
 
-            const sessionOpts = (state.allData || []).map(s => {
-                const timeTag = (s.start_time && s.end_time) ? ` (${formatTime12Hour(s.start_time)})` : '';
-                return { id: String(s.id), label: `${s.date}${timeTag} - ${s.location || 'TBA'}` };
-            });
+            const sessionOpts = getSessionOptions();
 
             if (playerOpts.length === 0 || sessionOpts.length === 0) {
                 Swal.fire('Notice', 'Cannot open form: Ensure you have loaded active sessions and players first.', 'info');
@@ -312,7 +348,24 @@
         document.getElementById('inf-from-date').addEventListener('change', filterInfractions);
         document.getElementById('inf-to-date').addEventListener('change', filterInfractions);
         document.getElementById('inf-type-select').addEventListener('change', filterInfractions);
+        document.getElementById('inf-player-search').addEventListener('input', filterInfractions);
+        document.getElementById('inf-session-select').addEventListener('change', filterInfractions);
         document.getElementById('open-manual-modal-btn').addEventListener('click', openManualInfractionModal);
+
+        document.getElementById('clear-filters-btn').addEventListener('click', () => {
+            document.getElementById('inf-player-search').value = '';
+            document.getElementById('inf-session-select').value = 'ALL';
+            document.getElementById('inf-type-select').value = 'ALL';
+            // Date range intentionally reset to the same default 30-day
+            // window used on page load, rather than cleared to empty,
+            // since an unbounded date range isn't the expected "reset" state.
+            const today = new Date();
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(today.getDate() - 30);
+            document.getElementById('inf-from-date').value = thirtyDaysAgo.toISOString().split('T')[0];
+            document.getElementById('inf-to-date').value = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0];
+            filterInfractions();
+        });
 
         (async () => {
             const today = new Date();
@@ -323,6 +376,7 @@
             document.getElementById('inf-to-date').value = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0];
 
             await loadData(); // needed so openManualInfractionModal can list sessions
+            populateSessionFilterDropdown();
             await fetchInfractionsData();
         })();
     </script>

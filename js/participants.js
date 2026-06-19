@@ -172,14 +172,15 @@ export async function joinSession(onComplete) {
 }
 
 export function toggleJoinButton() {
-    const select = document.getElementById('join-player-id');
+    const hiddenId = document.getElementById('join-player-id');
+    const visibleInput = document.getElementById('join-player-search');
     const btn = document.getElementById('join-btn');
     const errorMsg = document.getElementById('join-error');
 
-    if (select.value) {
+    if (hiddenId.value) {
         btn.classList.remove('opacity-50', 'cursor-not-allowed');
         btn.disabled = false;
-        select.classList.remove('border-red-500');
+        if (visibleInput) visibleInput.classList.remove('border-red-500');
         errorMsg.classList.add('hidden');
     } else {
         btn.classList.add('opacity-50', 'cursor-not-allowed');
@@ -188,11 +189,14 @@ export function toggleJoinButton() {
 }
 
 export function validateAndJoin(onComplete) {
-    const select = document.getElementById('join-player-id');
-    if (!select.value) {
-        select.classList.add('border-red-500', 'animate-pulse');
+    const hiddenId = document.getElementById('join-player-id');
+    const visibleInput = document.getElementById('join-player-search');
+    if (!hiddenId.value) {
+        if (visibleInput) {
+            visibleInput.classList.add('border-red-500', 'animate-pulse');
+            setTimeout(() => visibleInput.classList.remove('animate-pulse'), 500);
+        }
         document.getElementById('join-error').classList.remove('hidden');
-        setTimeout(() => select.classList.remove('animate-pulse'), 500);
         return;
     }
     joinSession(onComplete);

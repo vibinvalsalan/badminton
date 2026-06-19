@@ -91,7 +91,6 @@
                 return;
             }
 
-            const pOptions = state.masterPlayers.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
             const totalConfirmed = s.players.length;
             const totalPaid = s.players.filter(p => p.payment_status === 'Paid').length;
             const detailTime = (s.start_time && s.end_time)
@@ -157,11 +156,11 @@
                     <div class="mb-8">
                         <div class="flex gap-3">
                             <div class="flex-1 relative">
-                                <select id="join-player-id" onchange="toggleJoinButton()"
-                                    class="w-full bg-gray-50 rounded-2xl px-5 py-4 outline-none text-sm appearance-none border-2 border-transparent transition-all">
-                                    <option value="">Choose your name...</option>
-                                    ${pOptions}
-                                </select>
+                                <input type="text" id="join-player-search" autocomplete="off" placeholder="Type your name..."
+                                    class="w-full bg-gray-50 rounded-2xl px-5 py-4 outline-none text-sm border-2 border-transparent transition-all">
+                                <input type="hidden" id="join-player-id" value="">
+                                <div id="join-player-suggestions"
+                                    class="hidden absolute z-20 left-0 right-0 mt-1 bg-white rounded-2xl shadow-xl border border-gray-100 max-h-56 overflow-y-auto"></div>
                                 <p id="join-error" class="hidden text-red-500 text-[10px] mt-1 ml-2 font-bold">Please select a name to continue.</p>
                             </div>
                             <button id="join-btn" onclick="validateAndJoin()"
@@ -219,6 +218,65 @@
                     ` : ''}
                 </div>
             `;
+
+            setupPlayerSearchCombobox();
+        }
+
+        // Wires up the searchable player-name combobox: typing filters the
+        // suggestion list by substring match, clicking a suggestion selects
+        // that player (storing their id in the hidden #join-player-id field,
+        // which toggleJoinButton()/joinSession() already read from). Called
+        // every time renderDetailPage() runs, since innerHTML replacement
+        // wipes out any previously attached listeners.
+        function setupPlayerSearchCombobox() {
+            const searchInput = document.getElementById('join-player-search');
+            const suggestionsBox = document.getElementById('join-player-suggestions');
+            const hiddenIdInput = document.getElementById('join-player-id');
+            if (!searchInput) return;
+
+            function renderSuggestions(query) {
+                const q = query.trim().toLowerCase();
+                const matches = q
+                    ? state.masterPlayers.filter(p => p.name.toLowerCase().includes(q))
+                    : state.masterPlayers;
+
+                if (matches.length === 0) {
+                    suggestionsBox.innerHTML = `<p class="text-xs text-gray-400 italic px-4 py-3">No matching players</p>`;
+                } else {
+                    suggestionsBox.innerHTML = matches.map(p => `
+                        <button type="button" data-id="${p.id}" data-name="${p.name}"
+                            class="player-suggestion-item w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 transition-colors">
+                            ${p.name}
+                        </button>
+                    `).join('');
+                }
+                suggestionsBox.classList.remove('hidden');
+
+                suggestionsBox.querySelectorAll('.player-suggestion-item').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        hiddenIdInput.value = btn.dataset.id;
+                        searchInput.value = btn.dataset.name;
+                        suggestionsBox.classList.add('hidden');
+                        toggleJoinButton();
+                    });
+                });
+            }
+
+            searchInput.addEventListener('focus', () => renderSuggestions(searchInput.value));
+            searchInput.addEventListener('input', () => {
+                // Typing invalidates any previously selected player until
+                // they pick a fresh match from the list again.
+                hiddenIdInput.value = '';
+                toggleJoinButton();
+                renderSuggestions(searchInput.value);
+            });
+
+            // Hide suggestions when clicking outside the combobox.
+            document.addEventListener('click', (e) => {
+                if (!searchInput.contains(e.target) && !suggestionsBox.contains(e.target)) {
+                    suggestionsBox.classList.add('hidden');
+                }
+            });
         }
 
         // --- init ---

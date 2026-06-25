@@ -20,24 +20,58 @@ export async function logAction(action, details, playerName = null, sessionId = 
     }
 }
 
-export async function logVisit() {
-    let browser = "Unknown Browser";
+// Returns a persistent visitor ID stored in localStorage, creating one on
+// first visit. Unlike sessionStorage (cleared when a tab closes), this
+// survives across browser restarts and days, which is what makes it
+// possible to tell a returning visitor apart from a brand-new one.
+// Caveat: this identifies a browser profile, not a person — switching
+// devices/browsers or clearing site data creates a new ID.
+function getOrCreateVisitorId() {
+    let id = localStorage.getItem('visitorId');
+    if (!id) {
+        id = 'V-' + Math.random().toString(36).substr(2, 9).toUpperCase();
+        localStorage.setItem('visitorId', id);
+    }
+    return id;
+}
+
+function detectDeviceType() {
     const ua = navigator.userAgent;
+    if (ua.includes("iPhone") || ua.includes("iPad")) return "iOS";
+    if (ua.includes("Android")) return "Android";
+    if (ua.includes("Chrome")) return "Chrome (Desktop)";
+    if (ua.includes("Safari") && !ua.includes("Chrome")) return "Safari (Desktop)";
+    if (ua.includes("Firefox")) return "Firefox (Desktop)";
+    return "Unknown";
+}
 
-    if (ua.includes("iPhone") || ua.includes("iPad")) browser = "iOS Device";
-    else if (ua.includes("Android")) browser = "Android Device";
-    else if (ua.includes("Chrome")) browser = "Chrome";
-    else if (ua.includes("Safari") && !ua.includes("Chrome")) browser = "Safari";
-    else if (ua.includes("Firefox")) browser = "Firefox";
+export async function logVisit() {
+    const visitorId = getOrCreateVisitorId();
+    const deviceType = detectDeviceType();
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
 
-    if (sessionStorage.getItem('access_logged')) return;
+    // Log at most once per calendar day per visitor, so leaving a tab open
+    // doesn't inflate counts but returning tomorrow does register as a visit.
+    const lastLoggedDate = localStorage.getItem('lastVisitLoggedDate');
+    if (lastLoggedDate === today) return;
 
-    const accessId = 'ACC-' + Math.random().toString(36).substr(2, 9).toUpperCase();
-    const specs = { screen: `${screen.width}x${screen.height}` };
-    const details = `Access ID: ${accessId} | ${browser} | ${specs.screen} `;
+    const details = `Visitor: ${visitorId} | ${deviceType} | ${screen.width}x${screen.height}`;
 
-    await logAction('UNIQUE_ACCESS', details, 'Visitor', null);
-    sessionStorage.setItem('access_logged', 'true');
+    try {
+        const { error } = await _supabase.from('audit_logs').insert([{
+            action: 'UNIQUE_ACCESS',
+            details: details,
+            player_name: 'Visitor',
+            player_id: null,
+            session_info: null,
+            visitor_id: visitorId,
+            device_type: deviceType
+        }]);
+        if (error) throw error;
+        localStorage.setItem('lastVisitLoggedDate', today);
+    } catch (err) {
+        console.error("Visit log failed:", err.message);
+    }
 }
 
 export async function toggleSessionLogs(sid) {

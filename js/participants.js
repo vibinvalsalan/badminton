@@ -80,11 +80,17 @@ export async function handleRemoval(regId, sid, name, onComplete) {
     if (result.isConfirmed) {
         const session = state.allData.find(s => s.id === sid);
         const performer = state.isAdmin ? state.adminName : "User";
-        // NOTE: original code referenced `session.time`, which does not exist
-        // on the session object (it's start_time/end_time). Preserved as-is
-        // from the source SPA; session.time will render as `undefined`.
+
+        // Fixed: previously referenced `session.time`, which doesn't exist
+        // on the session object (it's start_time/end_time), so this always
+        // logged "undefined" for the time. Now built the same way every
+        // other audit message in this file does.
+        const displayTime = session && session.start_time && session.end_time
+            ? `${formatTime12Hour(session.start_time)} - ${formatTime12Hour(session.end_time)}`
+            : 'N/A';
+
         const logDetails = session
-            ? `${performer} removed ${name} from session on ${session.date} (${session.time})`
+            ? `${performer} removed ${name} from session on ${session.date} (${displayTime})`
             : `${performer} removed ${name} from session ID: ${sid}`;
 
         const { error } = await _supabase.from('registrations').delete().eq('id', regId);

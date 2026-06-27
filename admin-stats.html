@@ -17,10 +17,28 @@
         <h1 class="font-black tracking-tight text-lg uppercase">Player Participation</h1>
     </nav>
 
-    <div class="container mx-auto p-4 max-w-lg">
-        <div class="flex items-center mb-6">
+    <div class="container mx-auto p-4 max-w-lg space-y-4">
+        <div class="flex items-center mb-2">
             <h2 class="text-xl font-black uppercase italic tracking-tighter">Player Stats</h2>
         </div>
+
+        <div class="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm space-y-3">
+            <div class="grid grid-cols-2 gap-2">
+                <div>
+                    <label class="text-[9px] font-black text-gray-400 uppercase ml-1">From Date</label>
+                    <input type="date" id="stats-from-date" class="w-full bg-gray-50 p-2.5 rounded-xl border-none ring-1 ring-gray-200 outline-none text-xs">
+                </div>
+                <div>
+                    <label class="text-[9px] font-black text-gray-400 uppercase ml-1">To Date</label>
+                    <input type="date" id="stats-to-date" class="w-full bg-gray-50 p-2.5 rounded-xl border-none ring-1 ring-gray-200 outline-none text-xs">
+                </div>
+            </div>
+            <button id="stats-clear-filters-btn" class="w-full text-[10px] font-black text-gray-400 uppercase tracking-widest py-1 hover:text-blue-600 transition-colors">
+                Clear Filters (Show All-Time)
+            </button>
+        </div>
+
+        <p id="stats-range-label" class="text-[10px] font-black text-gray-400 uppercase ml-1"></p>
 
         <div class="bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm">
             <div id="stats-list" class="divide-y divide-gray-50"></div>
@@ -34,89 +52,120 @@
 
         if (!requireAdmin()) throw new Error('Not authenticated');
 
-        async function renderPlayerStats() {
+        // Counts here are derived from player_session_history rather than
+        // the pre-aggregated player_participation_stats view, because that
+        // view's games_played count is computed entirely server-side with
+        // no date column to filter by. player_session_history applies the
+        // exact same underlying condition (r.status = 'Confirmed' AND
+        // s.status = 'Completed'), so an unfiltered count here will match
+        // the old cumulative total exactly, while still allowing a
+        // client-side date-range filter on top.
+        let allHistory = []; // [{ player_id, player_name, session_id, session_date, session_location, session_time }]
+
+        async function fetchAllHistory() {
             const statsList = document.getElementById('stats-list');
             statsList.innerHTML = `<div class="p-8 text-center text-gray-400 font-bold uppercase text-[10px]">Loading...</div>`;
 
             try {
-                const { data, error } = await _supabase
-                    .from('player_participation_stats')
-                    .select('*')
-                    .order('games_played', { ascending: false });
+                const [{ data: historyData, error: historyError }, { data: playersData, error: playersError }] = await Promise.all([
+                    _supabase.from('player_session_history').select('*'),
+                    _supabase.from('players').select('id, name')
+                ]);
 
-                if (error) throw error;
+                if (historyError) throw historyError;
+                if (playersError) throw playersError;
 
-                statsList.innerHTML = data.map(s => `
-                    <div class="stats-row flex items-center justify-between p-5 border-b border-gray-50 hover:bg-blue-50 transition-all cursor-pointer group"
-                        data-player-id="${s.player_id}" data-player-name="${s.player_name}">
-                        <div class="flex flex-col">
-                            <span class="font-bold text-gray-800 group-hover:text-blue-600">${s.player_name}</span>
-                            <span class="text-[9px] text-gray-400 uppercase font-black tracking-widest">Click for history</span>
-                        </div>
-                        <div class="flex items-center bg-blue-50 px-4 py-2 rounded-2xl border border-blue-100 group-hover:bg-blue-600 group-hover:border-blue-600 transition-colors">
-                            <span class="text-sm font-black text-blue-600 mr-1 group-hover:text-white">${s.games_played}</span>
-                            <span class="text-[10px] font-black text-blue-400 uppercase group-hover:text-blue-100">Games</span>
-                        </div>
-                    </div>
-                `).join('');
+                const nameById = new Map((playersData || []).map(p => [p.id, p.name]));
 
-                document.querySelectorAll('.stats-row').forEach(row =>
-                    row.addEventListener('click', () => showPlayerHistory(row.dataset.playerId, row.dataset.playerName)));
+                allHistory = (historyData || []).map(h => ({
+                    ...h,
+                    player_name: nameById.get(h.player_id) || 'Unknown Player'
+                }));
 
+                renderPlayerStats();
             } catch (err) {
                 console.error("Stats Error:", err);
                 statsList.innerHTML = `<div class="p-8 text-center text-red-500 font-bold">Error loading stats</div>`;
             }
         }
 
-        async function showPlayerHistory(playerId, playerName) {
-            Swal.fire({
-                title: playerName,
-                html: '<p class="text-xs text-gray-400 uppercase font-black mb-4">Loading Session History...</p><div id="history-loader" class="space-y-2"></div>',
-                showConfirmButton: false,
-                customClass: { popup: 'rounded-3xl' },
-                didOpen: async () => {
-                    Swal.showLoading();
+        function getDateBounds() {
+            const fromVal = document.getElementById('stats-from-date').value;
+            const toVal = document.getElementById('stats-to-date').value;
+            return {
+                startBound: fromVal ? new Date(fromVal).setHours(0, 0, 0, 0) : null,
+                endBound: toVal ? new Date(toVal).setHours(23, 59, 59, 999) : null
+            };
+        }
 
-                    const { data, error } = await _supabase
-                        .from('player_session_history')
-                        .select('*')
-                        .eq('player_id', playerId)
-                        .order('session_date', { ascending: false });
+        function getFilteredHistory() {
+            const { startBound, endBound } = getDateBounds();
+            if (!startBound && !endBound) return allHistory;
 
-                    if (error || !data) {
-                        Swal.fire('Error', 'Could not load history', 'error');
-                        return;
-                    }
-
-                    const historyHtml = data.map(h => `
-                        <div class="flex justify-between items-center p-3 bg-gray-50 rounded-xl mb-2 text-left border border-gray-100">
-                            <div>
-                                <p class="text-[10px] font-black text-blue-600 uppercase leading-none">${formatDateWithDay(h.session_date)}</p>
-                                <p class="font-bold text-gray-800 text-sm mt-1">${h.session_time}</p>
-                            </div>
-                            <span class="text-[9px] font-bold text-gray-400 uppercase text-right max-w-[100px] truncate">${h.session_location}</span>
-                        </div>
-                    `).join('') || '<p class="text-gray-400 italic py-4">No completed sessions found.</p>';
-
-                    Swal.update({
-                        title: playerName,
-                        html: `
-                            <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Attendance Breakdown</p>
-                            <div class="max-h-[400px] overflow-y-auto pr-1">
-                                ${historyHtml}
-                            </div>
-                        `,
-                        showConfirmButton: true,
-                        confirmButtonText: 'Close',
-                        confirmButtonColor: '#2563eb'
-                    });
-                    Swal.hideLoading();
-                }
+            return allHistory.filter(h => {
+                const t = new Date(h.session_date).getTime();
+                if (startBound && t < startBound) return false;
+                if (endBound && t > endBound) return false;
+                return true;
             });
         }
 
-        renderPlayerStats();
+        function renderPlayerStats() {
+            const statsList = document.getElementById('stats-list');
+            const filtered = getFilteredHistory();
+            const { startBound, endBound } = getDateBounds();
+
+            document.getElementById('stats-range-label').innerText = (startBound || endBound)
+                ? 'Showing filtered date range'
+                : 'Showing all-time totals';
+
+            // Group by player_id, counting rows (= completed, confirmed games).
+            const countsByPlayer = new Map();
+            filtered.forEach(h => {
+                const existing = countsByPlayer.get(h.player_id);
+                if (existing) {
+                    existing.games_played += 1;
+                } else {
+                    countsByPlayer.set(h.player_id, { player_id: h.player_id, player_name: h.player_name, games_played: 1 });
+                }
+            });
+
+            const rows = Array.from(countsByPlayer.values()).sort((a, b) => b.games_played - a.games_played);
+
+            if (rows.length === 0) {
+                statsList.innerHTML = `<p class="text-center text-gray-400 italic py-8 text-xs">No completed sessions in this range.</p>`;
+                return;
+            }
+
+            statsList.innerHTML = rows.map(s => `
+                <div class="stats-row flex items-center justify-between p-5 border-b border-gray-50 hover:bg-blue-50 transition-all cursor-pointer group"
+                    data-player-id="${s.player_id}" data-player-name="${s.player_name}">
+                    <div class="flex flex-col">
+                        <span class="font-bold text-gray-800 group-hover:text-blue-600">${s.player_name}</span>
+                        <span class="text-[9px] text-gray-400 uppercase font-black tracking-widest">Click for history</span>
+                    </div>
+                    <div class="flex items-center bg-blue-50 px-4 py-2 rounded-2xl border border-blue-100 group-hover:bg-blue-600 group-hover:border-blue-600 transition-colors">
+                        <span class="text-sm font-black text-blue-600 mr-1 group-hover:text-white">${s.games_played}</span>
+                        <span class="text-[10px] font-black text-blue-400 uppercase group-hover:text-blue-100">Games</span>
+                    </div>
+                </div>
+            `).join('');
+
+            document.querySelectorAll('.stats-row').forEach(row =>
+                row.addEventListener('click', () => {
+                    window.location.href = `admin-player-detail.html?player=${row.dataset.playerId}`;
+                }));
+        }
+
+        document.getElementById('stats-from-date').addEventListener('change', renderPlayerStats);
+        document.getElementById('stats-to-date').addEventListener('change', renderPlayerStats);
+        document.getElementById('stats-clear-filters-btn').addEventListener('click', () => {
+            document.getElementById('stats-from-date').value = '';
+            document.getElementById('stats-to-date').value = '';
+            renderPlayerStats();
+        });
+
+        fetchAllHistory();
     </script>
 </body>
 </html>

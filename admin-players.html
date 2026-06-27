@@ -67,6 +67,7 @@
                 <div class="bg-white p-4 rounded-2xl border border-gray-100 flex justify-between items-center shadow-sm mb-2">
                     <span class="font-bold text-gray-700">${p.name}</span>
                     <div class="flex gap-2">
+                        <a href="admin-player-detail.html?player=${p.id}" class="text-xs bg-blue-50 text-blue-600 px-3 py-1 rounded-lg font-bold uppercase">View Profile</a>
                         <button class="edit-player-btn text-xs bg-gray-50 text-gray-600 px-3 py-1 rounded-lg font-bold uppercase" data-id="${p.id}" data-name="${p.name}">Edit</button>
                         <button class="delete-player-btn text-red-300 px-2" data-id="${p.id}" data-name="${p.name}">×</button>
                     </div>

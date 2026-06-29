@@ -41,6 +41,16 @@
                 <button id="cancel-player-edit-btn" class="w-1/3 bg-gray-100 font-bold p-4 rounded-2xl">Cancel</button>
                 <button id="save-player-edit-btn" class="w-2/3 bg-blue-600 text-white font-bold p-4 rounded-2xl shadow-lg">Update Name</button>
             </div>
+
+            <div class="border-t border-gray-100 pt-4">
+                <p class="text-[10px] font-black text-gray-400 uppercase mb-2">Notes</p>
+                <div class="flex gap-2 mb-3">
+                    <textarea id="new-note-text" rows="2" placeholder="Add a note (special instructions, payment notes, etc.)..."
+                        class="flex-1 bg-gray-50 p-3 rounded-xl border border-gray-100 text-sm outline-none resize-none"></textarea>
+                    <button id="add-note-btn" class="bg-gray-900 text-white px-4 rounded-xl font-bold text-xs uppercase self-stretch">Add</button>
+                </div>
+                <div id="player-notes-list" class="space-y-2 max-h-64 overflow-y-auto pr-1"></div>
+            </div>
         </div>
     </div>
 
@@ -84,6 +94,84 @@
             editorView.classList.remove('hidden');
             document.getElementById('edit-player-id').value = id;
             document.getElementById('edit-player-name').value = name;
+            document.getElementById('new-note-text').value = '';
+            loadPlayerNotes(id);
+        }
+
+        async function loadPlayerNotes(playerId) {
+            const container = document.getElementById('player-notes-list');
+            container.innerHTML = `<p class="text-xs text-gray-400 italic py-2">Loading notes...</p>`;
+
+            const { data, error } = await _supabase
+                .from('player_notes')
+                .select('*')
+                .eq('player_id', playerId)
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                container.innerHTML = `<p class="text-xs text-red-500 py-2">Could not load notes.</p>`;
+                return;
+            }
+
+            renderPlayerNotes(data || []);
+        }
+
+        function renderPlayerNotes(notes) {
+            const container = document.getElementById('player-notes-list');
+
+            if (notes.length === 0) {
+                container.innerHTML = `<p class="text-xs text-gray-400 italic py-2">No notes yet.</p>`;
+                return;
+            }
+
+            container.innerHTML = notes.map(n => `
+                <div class="bg-gray-50 p-3 rounded-xl border border-gray-100 text-xs">
+                    <div class="flex justify-between items-start gap-2 mb-1">
+                        <span class="text-gray-700 flex-1">${n.note_text}</span>
+                        <button class="delete-note-btn text-gray-300 hover:text-red-500 flex-shrink-0" data-id="${n.id}">×</button>
+                    </div>
+                    <p class="text-[9px] font-bold text-gray-400 uppercase">${n.created_by || 'Admin'} · ${new Date(n.created_at).toLocaleDateString()} ${new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                </div>
+            `).join('');
+
+            document.querySelectorAll('.delete-note-btn').forEach(btn =>
+                btn.addEventListener('click', () => deletePlayerNote(btn.dataset.id)));
+        }
+
+        async function addPlayerNote() {
+            const playerId = document.getElementById('edit-player-id').value;
+            const textarea = document.getElementById('new-note-text');
+            const noteText = textarea.value.trim();
+            if (!noteText) return;
+
+            const { error } = await _supabase.from('player_notes').insert([{
+                player_id: playerId,
+                note_text: noteText,
+                created_by: state.adminName || 'Admin'
+            }]);
+
+            if (error) {
+                Swal.fire('Error', 'Could not save note.', 'error');
+                return;
+            }
+
+            textarea.value = '';
+            await loadPlayerNotes(playerId);
+        }
+
+        async function deletePlayerNote(noteId) {
+            const { isConfirmed } = await Swal.fire({
+                title: 'Delete this note?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                confirmButtonText: 'Delete'
+            });
+            if (!isConfirmed) return;
+
+            const playerId = document.getElementById('edit-player-id').value;
+            await _supabase.from('player_notes').delete().eq('id', noteId);
+            await loadPlayerNotes(playerId);
         }
 
         async function addMasterPlayer() {
@@ -121,10 +209,19 @@
         document.getElementById('add-player-btn').addEventListener('click', addMasterPlayer);
         document.getElementById('cancel-player-edit-btn').addEventListener('click', showPlayerManager);
         document.getElementById('save-player-edit-btn').addEventListener('click', savePlayerUpdate);
+        document.getElementById('add-note-btn').addEventListener('click', addPlayerNote);
 
         (async () => {
             await loadData();
             renderMasterPlayerList();
+
+            // Support deep-linking straight into a player's edit/notes view,
+            // e.g. from the "Manage Notes" link on admin-player-detail.html.
+            const editId = new URLSearchParams(window.location.search).get('edit');
+            if (editId) {
+                const target = state.masterPlayers.find(p => String(p.id) === String(editId));
+                if (target) editPlayerForm(target.id, target.name);
+            }
         })();
     </script>
 </body>

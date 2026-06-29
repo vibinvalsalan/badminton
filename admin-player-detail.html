@@ -62,6 +62,14 @@
             </div>
 
             <div class="bg-white rounded-3xl border border-gray-100 shadow-sm">
+                <div class="p-4 flex justify-between items-center">
+                    <span class="text-xs font-black text-gray-700 uppercase">Upcoming Sessions</span>
+                    <span id="upcoming-count-badge" class="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">0</span>
+                </div>
+                <div id="upcoming-sessions-list" class="divide-y divide-gray-50 px-4 pb-4"></div>
+            </div>
+
+            <div class="bg-white rounded-3xl border border-gray-100 shadow-sm">
                 <button id="toggle-infractions-btn" class="w-full flex justify-between items-center p-4 text-left">
                     <span class="text-xs font-black text-gray-700 uppercase">Infraction History</span>
                     <span id="infractions-chevron" class="text-gray-300 text-xs">+ Show</span>
@@ -82,7 +90,7 @@
     <script type="module">
         import { requireAdmin } from './js/auth-guard.js';
         import { _supabase } from './js/supabase-client.js';
-        import { formatDateWithDay } from './js/format.js';
+        import { formatDateWithDay, formatTime12Hour } from './js/format.js';
 
         if (!requireAdmin()) throw new Error('Not authenticated');
 
@@ -156,6 +164,42 @@
             `).join('');
         }
 
+        function renderUpcomingSessions(records) {
+            const container = document.getElementById('upcoming-sessions-list');
+            const badge = document.getElementById('upcoming-count-badge');
+            badge.innerText = records.length;
+
+            if (records.length === 0) {
+                container.innerHTML = `<p class="text-center text-gray-400 italic py-6 text-xs">No upcoming sessions.</p>`;
+                return;
+            }
+
+            container.innerHTML = records.map(r => {
+                const isWaitlist = r.status === 'Waitlist';
+                const timeTag = (r.start_time && r.end_time) ? formatTime12Hour(r.start_time) + ' - ' + formatTime12Hour(r.end_time) : 'N/A';
+                const statusBadge = isWaitlist
+                    ? `<span class="text-[8px] font-black bg-orange-50 text-orange-600 border border-orange-200 uppercase px-2 py-0.5 rounded-md">Waitlist</span>`
+                    : `<span class="text-[8px] font-black bg-green-50 text-green-600 border border-green-200 uppercase px-2 py-0.5 rounded-md">Confirmed</span>`;
+                const cancelledTag = r.session_status === 'Cancelled'
+                    ? `<span class="text-[8px] font-black bg-red-50 text-red-600 border border-red-200 uppercase px-2 py-0.5 rounded-md ml-1">Cancelled</span>`
+                    : '';
+
+                return `
+                    <div class="py-3 flex justify-between items-center">
+                        <div>
+                            <div class="flex items-center gap-1 mb-0.5">
+                                ${statusBadge}
+                                ${cancelledTag}
+                            </div>
+                            <p class="text-[10px] font-black text-blue-600 uppercase leading-none">${formatDateWithDay(r.session_date)}</p>
+                            <p class="font-bold text-gray-800 text-sm mt-1">${timeTag}</p>
+                        </div>
+                        <span class="text-[9px] font-bold text-gray-400 uppercase text-right max-w-[120px] truncate">${r.session_location}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
         function recomputeAndRender() {
             const { startBound, endBound } = getDateBounds();
 
@@ -209,10 +253,22 @@
                 return;
             }
 
-            const [{ data: player, error: playerError }, { data: history, error: historyError }, { data: infractions, error: infractionsError }] = await Promise.all([
+            const today = new Date().toISOString().split('T')[0];
+
+            const [{ data: player, error: playerError }, { data: history, error: historyError }, { data: infractions, error: infractionsError }, { data: upcoming, error: upcomingError }] = await Promise.all([
                 _supabase.from('players').select('id, name').eq('id', playerId).maybeSingle(),
                 _supabase.from('player_session_history').select('*').eq('player_id', playerId).order('session_date', { ascending: false }),
-                _supabase.from('view_attendance_infractions').select('*').eq('player_id', playerId).order('session_date', { ascending: false })
+                _supabase.from('view_attendance_infractions').select('*').eq('player_id', playerId).order('session_date', { ascending: false }),
+                // Upcoming sessions aren't covered by player_session_history,
+                // since that view only includes Completed sessions with a
+                // Confirmed registration. This queries raw registrations
+                // joined to sessions instead, so Waitlist and Cancelled
+                // sessions remain visible here on purpose.
+                _supabase
+                    .from('registrations')
+                    .select('status, sessions(id, date, start_time, end_time, location, status)')
+                    .eq('player_id', playerId)
+                    .gte('sessions.date', today)
             ]);
 
             if (playerError || !player) {
@@ -228,6 +284,24 @@
             allSessionRows = historyError ? [] : (history || []);
             allInfractionRows = infractionsError ? [] : (infractions || []);
 
+            // Supabase's gte() filter on a joined column only restricts which
+            // *joined* rows are attached, not which top-level rows are
+            // returned — a registration whose session falls outside the
+            // filter comes back with sessions: null instead of being
+            // dropped. Filter those out explicitly, and sort by date.
+            const upcomingRows = (upcomingError ? [] : (upcoming || []))
+                .filter(r => r.sessions)
+                .map(r => ({
+                    status: r.status,
+                    session_date: r.sessions.date,
+                    start_time: r.sessions.start_time,
+                    end_time: r.sessions.end_time,
+                    session_location: r.sessions.location,
+                    session_status: r.sessions.status
+                }))
+                .sort((a, b) => new Date(a.session_date) - new Date(b.session_date));
+
+            renderUpcomingSessions(upcomingRows);
             recomputeAndRender();
         })();
     </script>

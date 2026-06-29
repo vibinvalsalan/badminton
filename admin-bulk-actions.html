@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+    <title>Bulk Actions | Admin | Badminton Manager Pro</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans text-gray-900">
+
+    <nav class="bg-blue-600 text-white p-4 shadow-lg sticky top-0 z-50 flex items-center gap-3">
+        <a href="admin.html" class="p-1 hover:bg-blue-700 rounded-full transition-colors">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+        </a>
+        <h1 class="font-black tracking-tight text-lg uppercase">Bulk Actions</h1>
+    </nav>
+
+    <div class="container mx-auto p-4 max-w-lg space-y-4">
+
+        <div class="bg-blue-50 border border-blue-100 rounded-2xl p-3 text-[10px] text-blue-800 leading-relaxed">
+            Select players and sessions below, then choose an action. Both actions apply to every selected player × every selected session combination.
+        </div>
+
+        <!-- Player selection -->
+        <div class="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm">
+            <div class="flex justify-between items-center mb-3">
+                <p class="text-[10px] font-black text-gray-400 uppercase">Select Players</p>
+                <span id="player-selected-count" class="text-[10px] font-black text-blue-600">0 selected</span>
+            </div>
+            <input type="text" id="player-filter-input" placeholder="Filter players..."
+                class="w-full bg-gray-50 p-2.5 rounded-xl border-none ring-1 ring-gray-200 outline-none text-xs mb-3">
+            <div id="player-checklist" class="space-y-1 max-h-56 overflow-y-auto pr-1"></div>
+        </div>
+
+        <!-- Session selection -->
+        <div class="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm">
+            <div class="flex justify-between items-center mb-3">
+                <p class="text-[10px] font-black text-gray-400 uppercase">Select Sessions</p>
+                <span id="session-selected-count" class="text-[10px] font-black text-blue-600">0 selected</span>
+            </div>
+            <div id="session-checklist" class="space-y-1 max-h-56 overflow-y-auto pr-1"></div>
+        </div>
+
+        <!-- Actions -->
+        <div class="grid grid-cols-1 gap-3">
+            <button id="bulk-add-btn" class="w-full bg-blue-600 text-white font-black py-4 rounded-2xl shadow-lg uppercase tracking-widest text-[11px]">
+                Bulk Add to Sessions
+            </button>
+            <button id="bulk-mark-paid-btn" class="w-full bg-green-600 text-white font-black py-4 rounded-2xl shadow-lg uppercase tracking-widest text-[11px]">
+                Bulk Mark as Paid
+            </button>
+        </div>
+    </div>
+
+    <script type="module">
+        import { requireAdmin } from './js/auth-guard.js';
+        import { _supabase } from './js/supabase-client.js';
+        import { state } from './js/state.js';
+        import { loadData } from './js/data.js';
+        import { formatDateWithDay, formatTime12Hour } from './js/format.js';
+        import { logAction } from './js/audit.js';
+
+        if (!requireAdmin()) throw new Error('Not authenticated');
+
+        function renderPlayerChecklist(filterText = '') {
+            const container = document.getElementById('player-checklist');
+            const q = filterText.trim().toLowerCase();
+            const matches = q
+                ? state.masterPlayers.filter(p => p.name.toLowerCase().includes(q))
+                : state.masterPlayers;
+
+            if (matches.length === 0) {
+                container.innerHTML = `<p class="text-xs text-gray-400 italic px-2 py-3">No matching players</p>`;
+                return;
+            }
+
+            container.innerHTML = matches.map(p => `
+                <label class="flex items-center gap-2 px-2 py-2 rounded-xl hover:bg-gray-50 cursor-pointer">
+                    <input type="checkbox" class="player-checkbox w-4 h-4 accent-blue-600" value="${p.id}" data-name="${p.name}">
+                    <span class="text-sm font-medium text-gray-700">${p.name}</span>
+                </label>
+            `).join('');
+
+            container.querySelectorAll('.player-checkbox').forEach(cb =>
+                cb.addEventListener('change', updateSelectedCounts));
+        }
+
+        function renderSessionChecklist() {
+            const container = document.getElementById('session-checklist');
+            const sorted = [...state.allData].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            if (sorted.length === 0) {
+                container.innerHTML = `<p class="text-xs text-gray-400 italic px-2 py-3">No sessions found</p>`;
+                return;
+            }
+
+            container.innerHTML = sorted.map(s => {
+                const timeTag = (s.start_time && s.end_time) ? `${formatTime12Hour(s.start_time)} - ${formatTime12Hour(s.end_time)}` : 'N/A';
+                return `
+                    <label class="flex items-center gap-2 px-2 py-2 rounded-xl hover:bg-gray-50 cursor-pointer">
+                        <input type="checkbox" class="session-checkbox w-4 h-4 accent-blue-600" value="${s.id}">
+                        <div class="flex-1 min-w-0">
+                            <span class="text-sm font-bold text-gray-700">${formatDateWithDay(s.date)}</span>
+                            <span class="text-xs text-gray-400 ml-1">${timeTag} · ${s.location} · ${s.players.length}/${s.capacity}</span>
+                        </div>
+                    </label>
+                `;
+            }).join('');
+
+            container.querySelectorAll('.session-checkbox').forEach(cb =>
+                cb.addEventListener('change', updateSelectedCounts));
+        }
+
+        function getSelectedPlayerIds() {
+            return Array.from(document.querySelectorAll('.player-checkbox:checked')).map(cb => cb.value);
+        }
+
+        function getSelectedSessionIds() {
+            return Array.from(document.querySelectorAll('.session-checkbox:checked')).map(cb => cb.value);
+        }
+
+        function updateSelectedCounts() {
+            document.getElementById('player-selected-count').innerText = `${getSelectedPlayerIds().length} selected`;
+            document.getElementById('session-selected-count').innerText = `${getSelectedSessionIds().length} selected`;
+        }
+
+        document.getElementById('player-filter-input').addEventListener('input', (e) => {
+            renderPlayerChecklist(e.target.value);
+        });
+
+        // --- Bulk Add ---
+        async function handleBulkAdd() {
+            const playerIds = getSelectedPlayerIds();
+            const sessionIds = getSelectedSessionIds();
+
+            if (playerIds.length === 0 || sessionIds.length === 0) {
+                Swal.fire('Selection Required', 'Please select at least one player and one session.', 'warning');
+                return;
+            }
+
+            const selectedPlayers = state.masterPlayers.filter(p => playerIds.includes(String(p.id)));
+            const selectedSessions = state.allData.filter(s => sessionIds.includes(String(s.id)));
+
+            // --- Validation pass (all-or-nothing): check capacity AND
+            // duplicate registrations across every session before writing
+            // anything. Any single failure blocks the entire operation.
+            const capacityErrors = [];
+            const duplicateErrors = [];
+            const rowsToInsert = [];
+
+            selectedSessions.forEach(s => {
+                const existingPlayerIds = new Set((s.registrations || []).map(r => String(r.player_id)));
+                const newPlayersForThisSession = selectedPlayers.filter(p => !existingPlayerIds.has(String(p.id)));
+                const duplicatePlayersForThisSession = selectedPlayers.filter(p => existingPlayerIds.has(String(p.id)));
+
+                if (duplicatePlayersForThisSession.length > 0) {
+                    duplicateErrors.push({
+                        session: s,
+                        players: duplicatePlayersForThisSession
+                    });
+                }
+
+                const projectedCount = s.players.length + newPlayersForThisSession.length;
+                if (projectedCount > s.capacity) {
+                    capacityErrors.push({
+                        session: s,
+                        wouldBe: projectedCount,
+                        capacity: s.capacity
+                    });
+                }
+
+                newPlayersForThisSession.forEach(p => {
+                    rowsToInsert.push({
+                        session_id: s.id,
+                        player_id: p.id,
+                        player_name: p.name,
+                        status: 'Confirmed',
+                        payment_status: 'Unpaid'
+                    });
+                });
+            });
+
+            if (capacityErrors.length > 0 || duplicateErrors.length > 0) {
+                let errorHtml = '<div class="text-left text-xs space-y-2">';
+                capacityErrors.forEach(e => {
+                    errorHtml += `<p>❌ <strong>${formatDateWithDay(e.session.date)}</strong> would have ${e.wouldBe} players, but capacity is ${e.capacity}.</p>`;
+                });
+                duplicateErrors.forEach(e => {
+                    const names = e.players.map(p => p.name).join(', ');
+                    errorHtml += `<p>❌ <strong>${formatDateWithDay(e.session.date)}</strong>: already registered — ${names}.</p>`;
+                });
+                errorHtml += '</div>';
+
+                Swal.fire({
+                    title: 'Cannot Complete Bulk Add',
+                    html: errorHtml,
+                    icon: 'error',
+                    confirmButtonColor: '#2563eb',
+                    customClass: { popup: 'rounded-3xl' }
+                });
+                return;
+            }
+
+            if (rowsToInsert.length === 0) {
+                Swal.fire('Nothing To Add', 'All selected players are already registered for all selected sessions.', 'info');
+                return;
+            }
+
+            const { isConfirmed } = await Swal.fire({
+                title: 'Confirm Bulk Add',
+                text: `This will add ${rowsToInsert.length} registration(s) across ${selectedSessions.length} session(s). Continue?`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#2563eb',
+                confirmButtonText: 'Yes, add them',
+                customClass: { popup: 'rounded-3xl' }
+            });
+            if (!isConfirmed) return;
+
+            const { error } = await _supabase.from('registrations').insert(rowsToInsert);
+
+            if (error) {
+                Swal.fire('Error', `Bulk add failed: ${error.message}`, 'error');
+                return;
+            }
+
+            const playerNames = selectedPlayers.map(p => p.name).join(', ');
+            const sessionDates = selectedSessions.map(s => formatDateWithDay(s.date)).join(', ');
+            await logAction('BULK_ADD', `${state.adminName} bulk-added [${playerNames}] to sessions [${sessionDates}]`, 'Bulk Action');
+
+            Swal.fire({
+                toast: true, position: 'top', icon: 'success',
+                title: `${rowsToInsert.length} registration(s) added!`, showConfirmButton: false, timer: 2000
+            });
+
+            await loadData();
+            renderSessionChecklist();
+            updateSelectedCounts();
+        }
+
+        // --- Bulk Mark Paid ---
+        async function handleBulkMarkPaid() {
+            const playerIds = getSelectedPlayerIds();
+            const sessionIds = getSelectedSessionIds();
+
+            if (playerIds.length === 0 || sessionIds.length === 0) {
+                Swal.fire('Selection Required', 'Please select at least one player and one session.', 'warning');
+                return;
+            }
+
+            const selectedPlayers = state.masterPlayers.filter(p => playerIds.includes(String(p.id)));
+            const selectedSessions = state.allData.filter(s => sessionIds.includes(String(s.id)));
+
+            // Only existing registrations are affected — this never creates
+            // new ones. Already-Paid rows are simply skipped (no-op), not
+            // treated as an error, since re-confirming a paid status isn't
+            // a meaningful conflict the way a duplicate join would be.
+            const registrationIdsToUpdate = [];
+            let alreadyPaidCount = 0;
+            let notRegisteredCount = 0;
+
+            selectedSessions.forEach(s => {
+                selectedPlayers.forEach(p => {
+                    const reg = (s.registrations || []).find(r => String(r.player_id) === String(p.id));
+                    if (!reg) {
+                        notRegisteredCount++;
+                        return;
+                    }
+                    if (reg.payment_status === 'Paid') {
+                        alreadyPaidCount++;
+                        return;
+                    }
+                    registrationIdsToUpdate.push(reg.id);
+                });
+            });
+
+            if (registrationIdsToUpdate.length === 0) {
+                Swal.fire('Nothing To Update', 'No matching unpaid registrations found for that selection.', 'info');
+                return;
+            }
+
+            let confirmText = `This will mark ${registrationIdsToUpdate.length} registration(s) as Paid.`;
+            if (alreadyPaidCount > 0) confirmText += ` (${alreadyPaidCount} already paid, will be skipped.)`;
+            if (notRegisteredCount > 0) confirmText += ` (${notRegisteredCount} player/session pair(s) have no registration and will be skipped.)`;
+
+            const { isConfirmed } = await Swal.fire({
+                title: 'Confirm Bulk Mark Paid',
+                text: confirmText,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#16a34a',
+                confirmButtonText: 'Yes, mark as paid',
+                customClass: { popup: 'rounded-3xl' }
+            });
+            if (!isConfirmed) return;
+
+            const { error } = await _supabase
+                .from('registrations')
+                .update({ payment_status: 'Paid' })
+                .in('id', registrationIdsToUpdate);
+
+            if (error) {
+                Swal.fire('Error', `Bulk update failed: ${error.message}`, 'error');
+                return;
+            }
+
+            const playerNames = selectedPlayers.map(p => p.name).join(', ');
+            const sessionDates = selectedSessions.map(s => formatDateWithDay(s.date)).join(', ');
+            await logAction('BULK_MARK_PAID', `${state.adminName} bulk-marked [${playerNames}] as Paid for sessions [${sessionDates}]`, 'Bulk Action');
+
+            Swal.fire({
+                toast: true, position: 'top', icon: 'success',
+                title: `${registrationIdsToUpdate.length} registration(s) marked Paid!`, showConfirmButton: false, timer: 2000
+            });
+
+            await loadData();
+            renderSessionChecklist();
+            updateSelectedCounts();
+        }
+
+        document.getElementById('bulk-add-btn').addEventListener('click', handleBulkAdd);
+        document.getElementById('bulk-mark-paid-btn').addEventListener('click', handleBulkMarkPaid);
+
+        (async () => {
+            await loadData();
+            renderPlayerChecklist();
+            renderSessionChecklist();
+        })();
+    </script>
+</body>
+</html>

@@ -149,6 +149,7 @@
             const capacityErrors = [];
             const duplicateErrors = [];
             const rowsToInsert = [];
+            const logEntriesPending = []; // metadata for per-row audit logging, built after insert succeeds
 
             selectedSessions.forEach(s => {
                 const existingPlayerIds = new Set((s.registrations || []).map(r => String(r.player_id)));
@@ -171,6 +172,10 @@
                     });
                 }
 
+                const displayTime = (s.start_time && s.end_time)
+                    ? `${formatTime12Hour(s.start_time)} - ${formatTime12Hour(s.end_time)}`
+                    : 'N/A';
+
                 newPlayersForThisSession.forEach(p => {
                     rowsToInsert.push({
                         session_id: s.id,
@@ -178,6 +183,13 @@
                         player_name: p.name,
                         status: 'Confirmed',
                         payment_status: 'Unpaid'
+                    });
+                    logEntriesPending.push({
+                        playerName: p.name,
+                        sessionId: s.id,
+                        sessionDate: s.date,
+                        displayTime,
+                        status: 'Confirmed'
                     });
                 });
             });
@@ -226,9 +238,16 @@
                 return;
             }
 
-            const playerNames = selectedPlayers.map(p => p.name).join(', ');
-            const sessionDates = selectedSessions.map(s => formatDateWithDay(s.date)).join(', ');
-            await logAction('BULK_ADD', `${state.adminName} bulk-added [${playerNames}] to sessions [${sessionDates}]`, 'Bulk Action');
+            // One audit log entry per player×session pair, in the same
+            // format/action-type as a manual single join, so this is
+            // indistinguishable in the audit log/search from someone
+            // joining individually — same as handleRemoval/handlePayment
+            // already do for their own actions.
+            for (const entry of logEntriesPending) {
+                const actionVerb = `${state.adminName} added ${entry.playerName} to`;
+                const logMessage = `${actionVerb} session on ${entry.sessionDate} (${entry.displayTime}), Status: ${entry.status}`;
+                await logAction('PLAYER_JOINED_SESSION', logMessage, entry.playerName, entry.sessionId);
+            }
 
             Swal.fire({
                 toast: true, position: 'top', icon: 'success',
@@ -258,6 +277,7 @@
             // treated as an error, since re-confirming a paid status isn't
             // a meaningful conflict the way a duplicate join would be.
             const registrationIdsToUpdate = [];
+            const logEntriesPending = []; // metadata for per-row audit logging, built after update succeeds
             let alreadyPaidCount = 0;
             let notRegisteredCount = 0;
 
@@ -273,6 +293,13 @@
                         return;
                     }
                     registrationIdsToUpdate.push(reg.id);
+                    logEntriesPending.push({
+                        registrationId: reg.id,
+                        playerName: p.name,
+                        playerId: p.id,
+                        sessionId: s.id,
+                        sessionDate: s.date
+                    });
                 });
             });
 
@@ -306,9 +333,15 @@
                 return;
             }
 
-            const playerNames = selectedPlayers.map(p => p.name).join(', ');
-            const sessionDates = selectedSessions.map(s => formatDateWithDay(s.date)).join(', ');
-            await logAction('BULK_MARK_PAID', `${state.adminName} bulk-marked [${playerNames}] as Paid for sessions [${sessionDates}]`, 'Bulk Action');
+            // One audit log entry per registration, in the same
+            // format/action-type as a manual single payment toggle, so this
+            // is indistinguishable in the audit log/search from someone
+            // marking a player paid individually.
+            for (const entry of logEntriesPending) {
+                const actionVerb = `${state.adminName} updated ${entry.playerName} as`;
+                const detailMsg = `${actionVerb} Paid for session on ${entry.sessionDate}`;
+                await logAction('PLAYER_PAID', detailMsg, entry.playerName, entry.sessionId, entry.playerId);
+            }
 
             Swal.fire({
                 toast: true, position: 'top', icon: 'success',

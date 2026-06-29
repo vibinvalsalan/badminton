@@ -28,6 +28,14 @@
                 <h2 id="player-name-header" class="text-2xl font-black text-gray-900"></h2>
             </div>
 
+            <div class="bg-white rounded-3xl border border-gray-100 shadow-sm p-4">
+                <div class="flex justify-between items-center mb-3">
+                    <span class="text-xs font-black text-gray-700 uppercase">Notes</span>
+                    <a id="manage-notes-link" href="#" class="text-[10px] font-black text-blue-600 uppercase">Manage Notes →</a>
+                </div>
+                <div id="profile-notes-list" class="space-y-2 max-h-56 overflow-y-auto pr-1"></div>
+            </div>
+
             <div class="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm space-y-3">
                 <div class="grid grid-cols-2 gap-2">
                     <div>
@@ -164,6 +172,20 @@
             `).join('');
         }
 
+        function renderProfileNotes(notes) {
+            const container = document.getElementById('profile-notes-list');
+            if (notes.length === 0) {
+                container.innerHTML = `<p class="text-center text-gray-400 italic py-4 text-xs">No notes yet.</p>`;
+                return;
+            }
+            container.innerHTML = notes.map(n => `
+                <div class="bg-gray-50 p-3 rounded-xl border border-gray-100 text-xs">
+                    <p class="text-gray-700 mb-1">${n.note_text}</p>
+                    <p class="text-[9px] font-bold text-gray-400 uppercase">${n.created_by || 'Admin'} · ${new Date(n.created_at).toLocaleDateString()}</p>
+                </div>
+            `).join('');
+        }
+
         function renderUpcomingSessions(records) {
             const container = document.getElementById('upcoming-sessions-list');
             const badge = document.getElementById('upcoming-count-badge');
@@ -255,7 +277,7 @@
 
             const today = new Date().toISOString().split('T')[0];
 
-            const [{ data: player, error: playerError }, { data: history, error: historyError }, { data: infractions, error: infractionsError }, { data: upcoming, error: upcomingError }] = await Promise.all([
+            const [{ data: player, error: playerError }, { data: history, error: historyError }, { data: infractions, error: infractionsError }, { data: upcoming, error: upcomingError }, { data: notes, error: notesError }] = await Promise.all([
                 _supabase.from('players').select('id, name').eq('id', playerId).maybeSingle(),
                 _supabase.from('player_session_history').select('*').eq('player_id', playerId).order('session_date', { ascending: false }),
                 _supabase.from('view_attendance_infractions').select('*').eq('player_id', playerId).order('session_date', { ascending: false }),
@@ -268,13 +290,17 @@
                     .from('registrations')
                     .select('status, sessions(id, date, start_time, end_time, location, status)')
                     .eq('player_id', playerId)
-                    .gte('sessions.date', today)
+                    .gte('sessions.date', today),
+                _supabase.from('player_notes').select('*').eq('player_id', playerId).order('created_at', { ascending: false })
             ]);
 
             if (playerError || !player) {
                 showError();
                 return;
             }
+
+            document.getElementById('manage-notes-link').href = `admin-players.html?edit=${player.id}`;
+            renderProfileNotes(notesError ? [] : (notes || []));
 
             document.getElementById('loading-state').classList.add('hidden');
             document.getElementById('profile-content').classList.remove('hidden');

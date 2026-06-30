@@ -43,7 +43,26 @@
         <div class="bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm">
             <div id="stats-list" class="divide-y divide-gray-50"></div>
         </div>
+
+        <div class="grid grid-cols-2 gap-3 export-controls">
+            <button id="export-csv-btn" class="w-full bg-gray-100 text-gray-700 font-black py-3 rounded-2xl uppercase tracking-widest text-[11px]">
+                Export CSV
+            </button>
+            <button id="export-print-btn" class="w-full bg-gray-900 text-white font-black py-3 rounded-2xl uppercase tracking-widest text-[11px]">
+                Print
+            </button>
+        </div>
     </div>
+
+    <div id="print-only-area" class="hidden"></div>
+
+    <style>
+        @media print {
+            body * { visibility: hidden; }
+            #print-only-area, #print-only-area * { visibility: visible; }
+            #print-only-area { display: block !important; position: absolute; top: 0; left: 0; width: 100%; }
+        }
+    </style>
 
     <script type="module">
         import { requireAdmin } from './js/auth-guard.js';
@@ -61,6 +80,85 @@
         // the old cumulative total exactly, while still allowing a
         // client-side date-range filter on top.
         let allHistory = []; // [{ player_id, player_name, session_id, session_date, session_location, session_time }]
+        let lastRenderedRows = []; // mirrors exactly what's currently on screen, used by both exports
+
+        function downloadCsv(filename, rows, columns) {
+            // columns: [{ key, header }]. Wraps any field containing a comma,
+            // quote, or newline in quotes per standard CSV escaping.
+            const escapeCell = (val) => {
+                const str = String(val ?? '');
+                if (/[",\n]/.test(str)) {
+                    return `"${str.replace(/"/g, '""')}"`;
+                }
+                return str;
+            };
+
+            const headerLine = columns.map(c => escapeCell(c.header)).join(',');
+            const dataLines = rows.map(row => columns.map(c => escapeCell(row[c.key])).join(','));
+            const csvContent = [headerLine, ...dataLines].join('\n');
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        function exportStatsCsv() {
+            if (lastRenderedRows.length === 0) {
+                Swal.fire('Nothing to Export', 'No data matches the current filters.', 'info');
+                return;
+            }
+            const { startBound, endBound } = getDateBounds();
+            const rangeTag = (startBound || endBound)
+                ? `_${document.getElementById('stats-from-date').value || 'start'}_to_${document.getElementById('stats-to-date').value || 'end'}`
+                : '_all-time';
+
+            downloadCsv(
+                `player-participation${rangeTag}.csv`,
+                lastRenderedRows,
+                [
+                    { key: 'player_name', header: 'Player Name' },
+                    { key: 'games_played', header: 'Games Played' }
+                ]
+            );
+        }
+
+        function exportStatsPrint() {
+            if (lastRenderedRows.length === 0) {
+                Swal.fire('Nothing to Print', 'No data matches the current filters.', 'info');
+                return;
+            }
+            const rangeLabel = document.getElementById('stats-range-label').innerText;
+
+            const rowsHtml = lastRenderedRows.map(s => `
+                <tr>
+                    <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${s.player_name}</td>
+                    <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${s.games_played}</td>
+                </tr>
+            `).join('');
+
+            document.getElementById('print-only-area').innerHTML = `
+                <div style="font-family: sans-serif; padding: 20px;">
+                    <h1 style="font-size:18px;margin-bottom:4px;">Player Participation Report</h1>
+                    <p style="font-size:11px;color:#666;margin-bottom:16px;">${rangeLabel} &middot; Generated ${new Date().toLocaleString()}</p>
+                    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                        <thead>
+                            <tr>
+                                <th style="text-align:left;padding:8px;border-bottom:2px solid #111;">Player Name</th>
+                                <th style="text-align:right;padding:8px;border-bottom:2px solid #111;">Games Played</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rowsHtml}</tbody>
+                    </table>
+                </div>
+            `;
+            window.print();
+        }
 
         async function fetchAllHistory() {
             const statsList = document.getElementById('stats-list');
@@ -131,6 +229,7 @@
             });
 
             const rows = Array.from(countsByPlayer.values()).sort((a, b) => b.games_played - a.games_played);
+            lastRenderedRows = rows;
 
             if (rows.length === 0) {
                 statsList.innerHTML = `<p class="text-center text-gray-400 italic py-8 text-xs">No completed sessions in this range.</p>`;
@@ -164,6 +263,8 @@
             document.getElementById('stats-to-date').value = '';
             renderPlayerStats();
         });
+        document.getElementById('export-csv-btn').addEventListener('click', exportStatsCsv);
+        document.getElementById('export-print-btn').addEventListener('click', exportStatsPrint);
 
         fetchAllHistory();
     </script>

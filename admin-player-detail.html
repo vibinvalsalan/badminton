@@ -92,8 +92,27 @@
                 </button>
                 <div id="sessions-list" class="divide-y divide-gray-50 px-4 pb-4"></div>
             </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <button id="export-csv-btn" class="w-full bg-gray-100 text-gray-700 font-black py-3 rounded-2xl uppercase tracking-widest text-[11px]">
+                    Export CSV
+                </button>
+                <button id="export-print-btn" class="w-full bg-gray-900 text-white font-black py-3 rounded-2xl uppercase tracking-widest text-[11px]">
+                    Print
+                </button>
+            </div>
         </div>
     </div>
+
+    <div id="print-only-area" class="hidden"></div>
+
+    <style>
+        @media print {
+            body * { visibility: hidden; }
+            #print-only-area, #print-only-area * { visibility: visible; }
+            #print-only-area { display: block !important; position: absolute; top: 0; left: 0; width: 100%; }
+        }
+    </style>
 
     <script type="module">
         import { requireAdmin } from './js/auth-guard.js';
@@ -106,6 +125,14 @@
         // recomputed from these on every filter change rather than re-fetched.
         let allSessionRows = [];
         let allInfractionRows = [];
+        let currentPlayerName = '';
+
+        // Mirrors exactly what's currently rendered (i.e. respects the active
+        // date filter), so CSV/print exports always match what's on screen.
+        let lastSessionRows = [];
+        let lastInfractionRows = [];
+        let lastUpcomingRows = [];
+        let lastStats = { gamesPlayed: 0, infractionCount: 0, onTimePct: 0 };
 
         function showError() {
             document.getElementById('loading-state').classList.add('hidden');
@@ -240,8 +267,154 @@
             const onTimePct = paymentRecords.length > 0 ? Math.round((onTimeCount / paymentRecords.length) * 100) : 0;
             document.getElementById('stat-ontime-pct').innerText = `${onTimePct}%`;
 
+            lastSessionRows = sessionRows;
+            lastInfractionRows = infractionRows;
+            lastStats = { gamesPlayed: sessionRows.length, infractionCount: infractionRows.length, onTimePct };
+
             renderInfractions(infractionRows);
             renderSessions(sessionRows);
+        }
+
+        function escapeCsvCell(val) {
+            const str = String(val ?? '');
+            if (/[",\n]/.test(str)) {
+                return `"${str.replace(/"/g, '""')}"`;
+            }
+            return str;
+        }
+
+        function downloadCsv(filename, content) {
+            const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        function exportProfileCsv() {
+            const lines = [];
+
+            lines.push(escapeCsvCell(`Player Report: ${currentPlayerName}`));
+            lines.push(escapeCsvCell(`Generated: ${new Date().toLocaleString()}`));
+            lines.push('');
+
+            lines.push('Summary');
+            lines.push('Games Played,Infractions,On-Time Payment %');
+            lines.push(`${lastStats.gamesPlayed},${lastStats.infractionCount},${lastStats.onTimePct}%`);
+            lines.push('');
+
+            lines.push('Sessions Played');
+            lines.push('Date,Time,Location');
+            if (lastSessionRows.length === 0) {
+                lines.push('(none in this range)');
+            } else {
+                lastSessionRows.forEach(h => {
+                    lines.push([escapeCsvCell(formatDateWithDay(h.session_date)), escapeCsvCell(h.session_time), escapeCsvCell(h.session_location)].join(','));
+                });
+            }
+            lines.push('');
+
+            lines.push('Infraction History');
+            lines.push('Date,Type,Reason');
+            if (lastInfractionRows.length === 0) {
+                lines.push('(none in this range)');
+            } else {
+                lastInfractionRows.forEach(r => {
+                    lines.push([escapeCsvCell(formatDateWithDay(r.session_date)), escapeCsvCell(r.infraction_type), escapeCsvCell(r.reason || '')].join(','));
+                });
+            }
+
+            const fileSafeName = currentPlayerName.replace(/[^a-z0-9]/gi, '_');
+            downloadCsv(`player-report_${fileSafeName}.csv`, lines.join('\n'));
+        }
+
+        function exportProfilePrint() {
+            const rangeLabel = document.getElementById('profile-range-label').innerText;
+
+            const sessionRowsHtml = lastSessionRows.length === 0
+                ? `<tr><td colspan="3" style="padding:8px;color:#999;">No sessions in this range.</td></tr>`
+                : lastSessionRows.map(h => `
+                    <tr>
+                        <td style="padding:6px;border-bottom:1px solid #e5e7eb;">${formatDateWithDay(h.session_date)}</td>
+                        <td style="padding:6px;border-bottom:1px solid #e5e7eb;">${h.session_time}</td>
+                        <td style="padding:6px;border-bottom:1px solid #e5e7eb;">${h.session_location}</td>
+                    </tr>`).join('');
+
+            const infractionRowsHtml = lastInfractionRows.length === 0
+                ? `<tr><td colspan="3" style="padding:8px;color:#999;">No infractions in this range.</td></tr>`
+                : lastInfractionRows.map(r => `
+                    <tr>
+                        <td style="padding:6px;border-bottom:1px solid #e5e7eb;">${formatDateWithDay(r.session_date)}</td>
+                        <td style="padding:6px;border-bottom:1px solid #e5e7eb;">${r.infraction_type}</td>
+                        <td style="padding:6px;border-bottom:1px solid #e5e7eb;">${r.reason || ''}</td>
+                    </tr>`).join('');
+
+            const upcomingRowsHtml = lastUpcomingRows.length === 0
+                ? `<tr><td colspan="4" style="padding:8px;color:#999;">No upcoming sessions.</td></tr>`
+                : lastUpcomingRows.map(r => {
+                    const timeTag = (r.start_time && r.end_time)
+                        ? `${formatTime12Hour(r.start_time)} - ${formatTime12Hour(r.end_time)}`
+                        : 'N/A';
+                    const statusTag = r.status === 'Waitlist' ? 'Waitlist' : 'Confirmed';
+                    return `
+                        <tr>
+                            <td style="padding:6px;border-bottom:1px solid #e5e7eb;">${formatDateWithDay(r.session_date)}</td>
+                            <td style="padding:6px;border-bottom:1px solid #e5e7eb;">${timeTag}</td>
+                            <td style="padding:6px;border-bottom:1px solid #e5e7eb;">${r.session_location}</td>
+                            <td style="padding:6px;border-bottom:1px solid #e5e7eb;">${statusTag}</td>
+                        </tr>`;
+                }).join('');
+
+            document.getElementById('print-only-area').innerHTML = `
+                <div style="font-family: sans-serif; padding: 20px;">
+                    <h1 style="font-size:18px;margin-bottom:4px;">Player Report: ${currentPlayerName}</h1>
+                    <p style="font-size:11px;color:#666;margin-bottom:16px;">${rangeLabel} &middot; Generated ${new Date().toLocaleString()}</p>
+
+                    <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:24px;">
+                        <tr>
+                            <td style="padding:8px;border:1px solid #e5e7eb;text-align:center;"><strong>${lastStats.gamesPlayed}</strong><br><span style="font-size:10px;color:#666;">Games Played</span></td>
+                            <td style="padding:8px;border:1px solid #e5e7eb;text-align:center;"><strong>${lastStats.infractionCount}</strong><br><span style="font-size:10px;color:#666;">Infractions</span></td>
+                            <td style="padding:8px;border:1px solid #e5e7eb;text-align:center;"><strong>${lastStats.onTimePct}%</strong><br><span style="font-size:10px;color:#666;">On-Time Payment</span></td>
+                        </tr>
+                    </table>
+
+                    <h2 style="font-size:14px;margin-bottom:8px;">Upcoming Sessions</h2>
+                    <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:24px;">
+                        <thead><tr>
+                            <th style="text-align:left;padding:6px;border-bottom:2px solid #111;">Date</th>
+                            <th style="text-align:left;padding:6px;border-bottom:2px solid #111;">Time</th>
+                            <th style="text-align:left;padding:6px;border-bottom:2px solid #111;">Location</th>
+                            <th style="text-align:left;padding:6px;border-bottom:2px solid #111;">Status</th>
+                        </tr></thead>
+                        <tbody>${upcomingRowsHtml}</tbody>
+                    </table>
+
+                    <h2 style="font-size:14px;margin-bottom:8px;">Sessions Played</h2>
+                    <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:24px;">
+                        <thead><tr>
+                            <th style="text-align:left;padding:6px;border-bottom:2px solid #111;">Date</th>
+                            <th style="text-align:left;padding:6px;border-bottom:2px solid #111;">Time</th>
+                            <th style="text-align:left;padding:6px;border-bottom:2px solid #111;">Location</th>
+                        </tr></thead>
+                        <tbody>${sessionRowsHtml}</tbody>
+                    </table>
+
+                    <h2 style="font-size:14px;margin-bottom:8px;">Infraction History</h2>
+                    <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                        <thead><tr>
+                            <th style="text-align:left;padding:6px;border-bottom:2px solid #111;">Date</th>
+                            <th style="text-align:left;padding:6px;border-bottom:2px solid #111;">Type</th>
+                            <th style="text-align:left;padding:6px;border-bottom:2px solid #111;">Reason</th>
+                        </tr></thead>
+                        <tbody>${infractionRowsHtml}</tbody>
+                    </table>
+                </div>
+            `;
+            window.print();
         }
 
         document.getElementById('profile-from-date').addEventListener('change', recomputeAndRender);
@@ -268,6 +441,9 @@
             chevron.innerText = isHidden ? '- Hide' : '+ Show';
         });
 
+        document.getElementById('export-csv-btn').addEventListener('click', exportProfileCsv);
+        document.getElementById('export-print-btn').addEventListener('click', exportProfilePrint);
+
         (async () => {
             const playerId = new URLSearchParams(window.location.search).get('player');
             if (!playerId) {
@@ -290,7 +466,7 @@
                     .from('registrations')
                     .select('status, sessions(id, date, start_time, end_time, location, status)')
                     .eq('player_id', playerId)
-                    .gte('sessions.date', today),
+                    .gt('sessions.date', today),
                 _supabase.from('player_notes').select('*').eq('player_id', playerId).order('created_at', { ascending: false })
             ]);
 
@@ -306,6 +482,7 @@
             document.getElementById('profile-content').classList.remove('hidden');
             document.getElementById('player-name-header').innerText = player.name;
             document.getElementById('nav-title').innerText = player.name;
+            currentPlayerName = player.name;
 
             allSessionRows = historyError ? [] : (history || []);
             allInfractionRows = infractionsError ? [] : (infractions || []);
@@ -328,6 +505,7 @@
                 .sort((a, b) => new Date(a.session_date) - new Date(b.session_date));
 
             renderUpcomingSessions(upcomingRows);
+            lastUpcomingRows = upcomingRows;
             recomputeAndRender();
         })();
     </script>

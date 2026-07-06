@@ -28,6 +28,7 @@
         <div class="flex bg-gray-100 p-1 rounded-xl gap-1 mb-4">
             <button id="tab-active" class="flex-1 text-xs font-black py-2 rounded-lg uppercase tracking-wide transition-all">Active</button>
             <button id="tab-past" class="flex-1 text-xs font-black py-2 rounded-lg uppercase tracking-wide transition-all">Past</button>
+            <button id="tab-hidden" class="flex-1 text-xs font-black py-2 rounded-lg uppercase tracking-wide transition-all">Hidden</button>
         </div>
 
         <div id="admin-active-list" class="space-y-4">
@@ -41,6 +42,12 @@
         <div id="admin-past-list" class="hidden space-y-4">
             <h2 class="text-xl font-black mb-4">Past Sessions</h2>
             <div id="list-past" class="space-y-3"></div>
+        </div>
+
+        <div id="admin-hidden-list" class="hidden space-y-4">
+            <h2 class="text-xl font-black mb-4">Hidden Sessions</h2>
+            <p class="text-[10px] text-gray-400 -mt-3 mb-2">Future sessions marked Private — only visible here in the Admin Dashboard.</p>
+            <div id="list-hidden" class="space-y-3"></div>
         </div>
 
         <div id="admin-editor" class="hidden animate-fadeIn bg-white p-6 rounded-3xl shadow-xl space-y-4 border border-gray-100 mt-4">
@@ -145,24 +152,26 @@
 
         const activeListEl = document.getElementById('admin-active-list');
         const pastListEl = document.getElementById('admin-past-list');
+        const hiddenListEl = document.getElementById('admin-hidden-list');
         const editorEl = document.getElementById('admin-editor');
         const tabActiveBtn = document.getElementById('tab-active');
         const tabPastBtn = document.getElementById('tab-past');
+        const tabHiddenBtn = document.getElementById('tab-hidden');
 
         function setTab(tab) {
-            const isActive = tab === 'active';
-
             // Only toggle list visibility if the editor isn't currently open
             // (closeEditor() is responsible for restoring the right list).
             if (editorEl.classList.contains('hidden')) {
-                activeListEl.classList.toggle('hidden', !isActive);
-                pastListEl.classList.toggle('hidden', isActive);
+                activeListEl.classList.toggle('hidden', tab !== 'active');
+                pastListEl.classList.toggle('hidden', tab !== 'past');
+                hiddenListEl.classList.toggle('hidden', tab !== 'hidden');
             }
 
-            tabActiveBtn.classList.toggle('bg-white', isActive);
-            tabActiveBtn.classList.toggle('shadow-sm', isActive);
-            tabPastBtn.classList.toggle('bg-white', !isActive);
-            tabPastBtn.classList.toggle('shadow-sm', !isActive);
+            [[tabActiveBtn, 'active'], [tabPastBtn, 'past'], [tabHiddenBtn, 'hidden']].forEach(([btn, key]) => {
+                const isSelected = tab === key;
+                btn.classList.toggle('bg-white', isSelected);
+                btn.classList.toggle('shadow-sm', isSelected);
+            });
 
             const url = new URL(window.location);
             url.searchParams.set('tab', tab);
@@ -171,18 +180,26 @@
 
         tabActiveBtn.addEventListener('click', () => { closeEditor(); setTab('active'); });
         tabPastBtn.addEventListener('click', () => { closeEditor(); setTab('past'); });
+        tabHiddenBtn.addEventListener('click', () => { closeEditor(); setTab('hidden'); });
 
         function renderAdminLists() {
             const activeContainer = document.getElementById('list-active');
             const pastContainer = document.getElementById('list-past');
+            const hiddenContainer = document.getElementById('list-hidden');
             const today = new Date().setHours(0, 0, 0, 0);
 
             activeContainer.innerHTML = '';
             pastContainer.innerHTML = '';
+            hiddenContainer.innerHTML = '';
 
             state.allData.sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(s => {
                 const isPast = new Date(s.date).setHours(0, 0, 0, 0) < today;
-                const target = isPast ? pastContainer : activeContainer;
+                // Past sessions always go to Past regardless of visibility
+                // (unchanged behavior). Among future sessions, ones marked
+                // Private (is_visible === false) move to the new Hidden tab
+                // instead of Active.
+                const isHiddenFuture = !isPast && s.is_visible === false;
+                const target = isPast ? pastContainer : (isHiddenFuture ? hiddenContainer : activeContainer);
 
                 const detailTime = (s.start_time && s.end_time)
                     ? `${formatTime12Hour(s.start_time)} - ${formatTime12Hour(s.end_time)}`
@@ -227,6 +244,7 @@
         function showSessionForm(id = null) {
             activeListEl.classList.add('hidden');
             pastListEl.classList.add('hidden');
+            hiddenListEl.classList.add('hidden');
             editorEl.classList.remove('hidden');
 
             const visibleSelect = document.getElementById('f-visible');
@@ -268,7 +286,8 @@
             editorEl.classList.add('hidden');
             const tab = new URLSearchParams(window.location.search).get('tab') || 'active';
             activeListEl.classList.toggle('hidden', tab !== 'active');
-            pastListEl.classList.toggle('hidden', tab === 'active');
+            pastListEl.classList.toggle('hidden', tab !== 'past');
+            hiddenListEl.classList.toggle('hidden', tab !== 'hidden');
         }
 
         async function saveSession() {
@@ -310,16 +329,14 @@
             let actionType;
             let logMsg;
             const currentAdmin = state.adminName || localStorage.getItem('adminName') || 'Admin';
-            const sessionTime = (sData.start_time && sData.end_time) ? `${formatTime12Hour(sData.start_time)} - ${formatTime12Hour(sData.end_time)}`
-                : 'N/A';
 
             if (sessionId) {
                 actionType = 'SESSION_UPDATED';
-                logMsg = `${currentAdmin} updated session on ${sData.date} (${sessionTime})`;
+                logMsg = `${currentAdmin} updated session on ${sData.date} (${sData.time})`;
                 result = await _supabase.from('sessions').update(sData).eq('id', sessionId).select().single();
             } else {
                 actionType = 'SESSION_CREATED';
-                logMsg = `${currentAdmin} created a new session for ${sData.date} (${sessionTime}}) at ${sData.location}`;
+                logMsg = `${currentAdmin} created a new session for ${sData.date} (${sData.time}) at ${sData.location}`;
                 result = await _supabase.from('sessions').insert([sData]).select().single();
             }
 
@@ -328,9 +345,17 @@
                 await logAction(actionType, logMsg, currentAdmin, targetId);
 
                 closeEditor();
-                setTab('active');
                 await loadData();
                 renderAdminLists();
+
+                // Jump to whichever tab the saved session actually belongs in,
+                // rather than always landing on Active regardless of visibility.
+                const today = new Date().setHours(0, 0, 0, 0);
+                const sessionDate = new Date(sData.date).setHours(0, 0, 0, 0);
+                const isPast = sessionDate < today;
+                const isHiddenFuture = !isPast && sData.is_visible === false;
+                const destinationTab = isPast ? 'past' : (isHiddenFuture ? 'hidden' : 'active');
+                setTab(destinationTab);
 
                 Swal.fire({
                     icon: 'success',

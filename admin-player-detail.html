@@ -131,6 +131,7 @@
         // date filter), so CSV/print exports always match what's on screen.
         let lastSessionRows = [];
         let lastInfractionRows = [];
+        let lastUpcomingRows = [];
         let lastStats = { gamesPlayed: 0, infractionCount: 0, onTimePct: 0 };
 
         function showError() {
@@ -331,40 +332,92 @@
             downloadCsv(`player-report_${fileSafeName}.csv`, lines.join('\n'));
         }
 
-        function exportProfilePrint() {
+        async function exportProfilePrint() {
+            const { value: selections, isConfirmed } = await Swal.fire({
+                title: 'Choose Sections to Print',
+                html: `
+                    <div class="text-left space-y-3 text-sm">
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input type="checkbox" id="print-summary" checked class="w-4 h-4 accent-blue-600">
+                            <span class="font-medium">Summary Stats</span>
+                        </label>
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input type="checkbox" id="print-upcoming" checked class="w-4 h-4 accent-blue-600">
+                            <span class="font-medium">Upcoming Sessions</span>
+                        </label>
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input type="checkbox" id="print-sessions" checked class="w-4 h-4 accent-blue-600">
+                            <span class="font-medium">Sessions Played</span>
+                        </label>
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input type="checkbox" id="print-infractions" checked class="w-4 h-4 accent-blue-600">
+                            <span class="font-medium">Infraction History</span>
+                        </label>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Print',
+                confirmButtonColor: '#111827',
+                customClass: { popup: 'rounded-3xl' },
+                preConfirm: () => ({
+                    summary:     document.getElementById('print-summary').checked,
+                    upcoming:    document.getElementById('print-upcoming').checked,
+                    sessions:    document.getElementById('print-sessions').checked,
+                    infractions: document.getElementById('print-infractions').checked
+                })
+            });
+
+            if (!isConfirmed) return;
+
             const rangeLabel = document.getElementById('profile-range-label').innerText;
+            let sections = '';
 
-            const sessionRowsHtml = lastSessionRows.length === 0
-                ? `<tr><td colspan="3" style="padding:8px;color:#999;">No sessions in this range.</td></tr>`
-                : lastSessionRows.map(h => `
-                    <tr>
-                        <td style="padding:6px;border-bottom:1px solid #e5e7eb;">${formatDateWithDay(h.session_date)}</td>
-                        <td style="padding:6px;border-bottom:1px solid #e5e7eb;">${h.session_time}</td>
-                        <td style="padding:6px;border-bottom:1px solid #e5e7eb;">${h.session_location}</td>
-                    </tr>`).join('');
-
-            const infractionRowsHtml = lastInfractionRows.length === 0
-                ? `<tr><td colspan="3" style="padding:8px;color:#999;">No infractions in this range.</td></tr>`
-                : lastInfractionRows.map(r => `
-                    <tr>
-                        <td style="padding:6px;border-bottom:1px solid #e5e7eb;">${formatDateWithDay(r.session_date)}</td>
-                        <td style="padding:6px;border-bottom:1px solid #e5e7eb;">${r.infraction_type}</td>
-                        <td style="padding:6px;border-bottom:1px solid #e5e7eb;">${r.reason || ''}</td>
-                    </tr>`).join('');
-
-            document.getElementById('print-only-area').innerHTML = `
-                <div style="font-family: sans-serif; padding: 20px;">
-                    <h1 style="font-size:18px;margin-bottom:4px;">Player Report: ${currentPlayerName}</h1>
-                    <p style="font-size:11px;color:#666;margin-bottom:16px;">${rangeLabel} &middot; Generated ${new Date().toLocaleString()}</p>
-
+            if (selections.summary) {
+                sections += `
                     <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:24px;">
                         <tr>
                             <td style="padding:8px;border:1px solid #e5e7eb;text-align:center;"><strong>${lastStats.gamesPlayed}</strong><br><span style="font-size:10px;color:#666;">Games Played</span></td>
                             <td style="padding:8px;border:1px solid #e5e7eb;text-align:center;"><strong>${lastStats.infractionCount}</strong><br><span style="font-size:10px;color:#666;">Infractions</span></td>
                             <td style="padding:8px;border:1px solid #e5e7eb;text-align:center;"><strong>${lastStats.onTimePct}%</strong><br><span style="font-size:10px;color:#666;">On-Time Payment</span></td>
                         </tr>
-                    </table>
+                    </table>`;
+            }
 
+            if (selections.upcoming) {
+                const rows = lastUpcomingRows.length === 0
+                    ? `<tr><td colspan="4" style="padding:8px;color:#999;">No upcoming sessions.</td></tr>`
+                    : lastUpcomingRows.map(r => {
+                        const timeTag = (r.start_time && r.end_time)
+                            ? `${formatTime12Hour(r.start_time)} - ${formatTime12Hour(r.end_time)}` : 'N/A';
+                        return `<tr>
+                            <td style="padding:6px;border-bottom:1px solid #e5e7eb;">${formatDateWithDay(r.session_date)}</td>
+                            <td style="padding:6px;border-bottom:1px solid #e5e7eb;">${timeTag}</td>
+                            <td style="padding:6px;border-bottom:1px solid #e5e7eb;">${r.session_location}</td>
+                            <td style="padding:6px;border-bottom:1px solid #e5e7eb;">${r.status}${r.session_status === 'Cancelled' ? ' ⚠️' : ''}</td>
+                        </tr>`;
+                    }).join('');
+                sections += `
+                    <h2 style="font-size:14px;margin-bottom:8px;">Upcoming Sessions</h2>
+                    <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:24px;">
+                        <thead><tr>
+                            <th style="text-align:left;padding:6px;border-bottom:2px solid #111;">Date</th>
+                            <th style="text-align:left;padding:6px;border-bottom:2px solid #111;">Time</th>
+                            <th style="text-align:left;padding:6px;border-bottom:2px solid #111;">Location</th>
+                            <th style="text-align:left;padding:6px;border-bottom:2px solid #111;">Status</th>
+                        </tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>`;
+            }
+
+            if (selections.sessions) {
+                const rows = lastSessionRows.length === 0
+                    ? `<tr><td colspan="3" style="padding:8px;color:#999;">No sessions in this range.</td></tr>`
+                    : lastSessionRows.map(h => `<tr>
+                        <td style="padding:6px;border-bottom:1px solid #e5e7eb;">${formatDateWithDay(h.session_date)}</td>
+                        <td style="padding:6px;border-bottom:1px solid #e5e7eb;">${h.session_time}</td>
+                        <td style="padding:6px;border-bottom:1px solid #e5e7eb;">${h.session_location}</td>
+                    </tr>`).join('');
+                sections += `
                     <h2 style="font-size:14px;margin-bottom:8px;">Sessions Played</h2>
                     <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:24px;">
                         <thead><tr>
@@ -372,9 +425,19 @@
                             <th style="text-align:left;padding:6px;border-bottom:2px solid #111;">Time</th>
                             <th style="text-align:left;padding:6px;border-bottom:2px solid #111;">Location</th>
                         </tr></thead>
-                        <tbody>${sessionRowsHtml}</tbody>
-                    </table>
+                        <tbody>${rows}</tbody>
+                    </table>`;
+            }
 
+            if (selections.infractions) {
+                const rows = lastInfractionRows.length === 0
+                    ? `<tr><td colspan="3" style="padding:8px;color:#999;">No infractions in this range.</td></tr>`
+                    : lastInfractionRows.map(r => `<tr>
+                        <td style="padding:6px;border-bottom:1px solid #e5e7eb;">${formatDateWithDay(r.session_date)}</td>
+                        <td style="padding:6px;border-bottom:1px solid #e5e7eb;">${r.infraction_type}</td>
+                        <td style="padding:6px;border-bottom:1px solid #e5e7eb;">${r.reason || ''}</td>
+                    </tr>`).join('');
+                sections += `
                     <h2 style="font-size:14px;margin-bottom:8px;">Infraction History</h2>
                     <table style="width:100%;border-collapse:collapse;font-size:12px;">
                         <thead><tr>
@@ -382,10 +445,21 @@
                             <th style="text-align:left;padding:6px;border-bottom:2px solid #111;">Type</th>
                             <th style="text-align:left;padding:6px;border-bottom:2px solid #111;">Reason</th>
                         </tr></thead>
-                        <tbody>${infractionRowsHtml}</tbody>
-                    </table>
-                </div>
-            `;
+                        <tbody>${rows}</tbody>
+                    </table>`;
+            }
+
+            if (!sections) {
+                Swal.fire('Nothing Selected', 'Please select at least one section to print.', 'info');
+                return;
+            }
+
+            document.getElementById('print-only-area').innerHTML = `
+                <div style="font-family: sans-serif; padding: 20px;">
+                    <h1 style="font-size:18px;margin-bottom:4px;">Player Report: ${currentPlayerName}</h1>
+                    <p style="font-size:11px;color:#666;margin-bottom:16px;">${rangeLabel} &middot; Generated ${new Date().toLocaleString()}</p>
+                    ${sections}
+                </div>`;
             window.print();
         }
 
@@ -474,6 +548,7 @@
                     session_location: r.sessions.location,
                     session_status: r.sessions.status
                 }))
+                .filter(r => r.session_status === 'Scheduled' || r.session_status === 'Cancelled')
                 .sort((a, b) => new Date(a.session_date) - new Date(b.session_date));
 
             renderUpcomingSessions(upcomingRows);

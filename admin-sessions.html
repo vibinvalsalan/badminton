@@ -50,34 +50,7 @@
             <div id="list-hidden" class="space-y-3"></div>
         </div>
 
-        <div id="admin-duplicator" class="hidden animate-fadeIn bg-white p-6 rounded-3xl shadow-xl space-y-4 border border-gray-100 mt-4">
-            <div class="flex justify-between items-center mb-2">
-                <h2 class="text-xl font-black tracking-tight uppercase">Duplicate Session</h2>
-                <span class="text-[10px] bg-purple-100 text-purple-600 px-2 py-1 rounded-lg font-bold">BULK CREATE</span>
-            </div>
-
-            <div id="dup-source-summary" class="bg-gray-50 p-4 rounded-2xl border border-gray-100 text-xs space-y-1"></div>
-
-            <div>
-                <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Add Target Dates</label>
-                <div class="flex gap-2 mt-1">
-                    <input type="date" id="dup-date-input"
-                        class="flex-1 bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm">
-                    <button id="dup-add-date-btn"
-                        class="bg-gray-900 text-white px-4 rounded-xl font-bold text-xs uppercase">Add</button>
-                </div>
-                <p class="text-[9px] text-gray-400 ml-1 mt-1">Each date you add will create one copy of the source session.</p>
-            </div>
-
-            <div id="dup-dates-list" class="space-y-2 max-h-48 overflow-y-auto pr-1"></div>
-
-            <div class="flex gap-3 pt-2">
-                <button id="dup-cancel-btn" class="w-1/3 bg-gray-100 text-gray-600 font-black py-4 rounded-2xl uppercase tracking-widest text-[11px]">Cancel</button>
-                <button id="dup-create-btn" class="w-2/3 bg-purple-600 text-white font-black py-4 rounded-2xl shadow-lg uppercase tracking-widest text-[11px]">
-                    Create Sessions
-                </button>
-            </div>
-        </div>
+        <div id="admin-editor" class="hidden animate-fadeIn bg-white p-6 rounded-3xl shadow-xl space-y-4 border border-gray-100 mt-4">
             <div class="flex justify-between items-center mb-2">
                 <h2 id="editor-title" class="text-xl font-black tracking-tight uppercase">Session Editor</h2>
                 <span class="text-[10px] bg-blue-100 text-blue-600 px-2 py-1 rounded-lg font-bold">ADMIN ONLY</span>
@@ -181,13 +154,14 @@
         const pastListEl = document.getElementById('admin-past-list');
         const hiddenListEl = document.getElementById('admin-hidden-list');
         const editorEl = document.getElementById('admin-editor');
-        const duplicatorEl = document.getElementById('admin-duplicator');
         const tabActiveBtn = document.getElementById('tab-active');
         const tabPastBtn = document.getElementById('tab-past');
         const tabHiddenBtn = document.getElementById('tab-hidden');
 
         function setTab(tab) {
-            if (editorEl.classList.contains('hidden') && duplicatorEl.classList.contains('hidden')) {
+            // Only toggle list visibility if the editor isn't currently open
+            // (closeEditor() is responsible for restoring the right list).
+            if (editorEl.classList.contains('hidden')) {
                 activeListEl.classList.toggle('hidden', tab !== 'active');
                 pastListEl.classList.toggle('hidden', tab !== 'past');
                 hiddenListEl.classList.toggle('hidden', tab !== 'hidden');
@@ -204,9 +178,9 @@
             history.replaceState(null, '', url);
         }
 
-        tabActiveBtn.addEventListener('click', () => { closeEditor(); closeDuplicator(); setTab('active'); });
-        tabPastBtn.addEventListener('click', () => { closeEditor(); closeDuplicator(); setTab('past'); });
-        tabHiddenBtn.addEventListener('click', () => { closeEditor(); closeDuplicator(); setTab('hidden'); });
+        tabActiveBtn.addEventListener('click', () => { closeEditor(); setTab('active'); });
+        tabPastBtn.addEventListener('click', () => { closeEditor(); setTab('past'); });
+        tabHiddenBtn.addEventListener('click', () => { closeEditor(); setTab('hidden'); });
 
         function renderAdminLists() {
             const activeContainer = document.getElementById('list-active');
@@ -245,7 +219,6 @@
                     <div class="flex gap-2">
                         <a href="session.html?session=${s.id}" class="bg-blue-50 text-blue-700 font-bold text-[10px] px-3 py-2 rounded-xl">View</a>
                         <button class="edit-session-btn bg-gray-50 text-gray-600 font-bold text-[10px] px-3 py-2 rounded-xl" data-id="${s.id}">Edit</button>
-                        <button class="dup-session-btn bg-purple-50 text-purple-700 font-bold text-[10px] px-3 py-2 rounded-xl" data-id="${s.id}">Dup</button>
                         <button class="delete-session-btn text-red-300 px-2" data-id="${s.id}">×</button>
                     </div>`;
                 target.appendChild(item);
@@ -253,8 +226,6 @@
 
             document.querySelectorAll('.edit-session-btn').forEach(btn =>
                 btn.addEventListener('click', () => showSessionForm(btn.dataset.id)));
-            document.querySelectorAll('.dup-session-btn').forEach(btn =>
-                btn.addEventListener('click', () => showDuplicator(btn.dataset.id)));
             document.querySelectorAll('.delete-session-btn').forEach(btn =>
                 btn.addEventListener('click', () => deleteSession(btn.dataset.id)));
         }
@@ -274,7 +245,6 @@
             activeListEl.classList.add('hidden');
             pastListEl.classList.add('hidden');
             hiddenListEl.classList.add('hidden');
-            duplicatorEl.classList.add('hidden');
             editorEl.classList.remove('hidden');
 
             const visibleSelect = document.getElementById('f-visible');
@@ -314,15 +284,6 @@
 
         function closeEditor() {
             editorEl.classList.add('hidden');
-            duplicatorEl.classList.add('hidden');
-            const tab = new URLSearchParams(window.location.search).get('tab') || 'active';
-            activeListEl.classList.toggle('hidden', tab !== 'active');
-            pastListEl.classList.toggle('hidden', tab !== 'past');
-            hiddenListEl.classList.toggle('hidden', tab !== 'hidden');
-        }
-
-        function closeDuplicator() {
-            duplicatorEl.classList.add('hidden');
             const tab = new URLSearchParams(window.location.search).get('tab') || 'active';
             activeListEl.classList.toggle('hidden', tab !== 'active');
             pastListEl.classList.toggle('hidden', tab !== 'past');
@@ -436,149 +397,9 @@
             }
         }
 
-        // --- Bulk Duplicate ---
-        let duplicateSourceId = null;
-        let targetDates = []; // array of YYYY-MM-DD strings
-
-        function showDuplicator(id) {
-            const s = state.allData.find(x => x.id === id);
-            if (!s) return;
-
-            duplicateSourceId = id;
-            targetDates = [];
-
-            activeListEl.classList.add('hidden');
-            pastListEl.classList.add('hidden');
-            hiddenListEl.classList.add('hidden');
-            editorEl.classList.add('hidden');
-            duplicatorEl.classList.remove('hidden');
-
-            const displayTime = (s.start_time && s.end_time)
-                ? `${formatTime12Hour(s.start_time)} - ${formatTime12Hour(s.end_time)}`
-                : 'N/A';
-
-            document.getElementById('dup-source-summary').innerHTML = `
-                <p class="font-black text-gray-700">Copying from: ${formatDateWithDay(s.date)}</p>
-                <p class="text-gray-500">Time: ${displayTime}</p>
-                <p class="text-gray-500">Location: ${s.location}</p>
-                <p class="text-gray-500">Capacity: ${s.capacity} · Fee: ${s.fee}</p>
-                <p class="text-[9px] text-gray-400 mt-1 uppercase font-bold">New sessions will be created as Hidden (Private) and start with no players registered.</p>
-            `;
-
-            document.getElementById('dup-date-input').value = '';
-            renderDuplicateDates();
-        }
-
-        function renderDuplicateDates() {
-            const container = document.getElementById('dup-dates-list');
-            if (targetDates.length === 0) {
-                container.innerHTML = `<p class="text-xs text-gray-400 italic py-2">No dates added yet.</p>`;
-                return;
-            }
-            container.innerHTML = targetDates.map((d, i) => `
-                <div class="flex justify-between items-center bg-gray-50 px-4 py-2.5 rounded-xl border border-gray-100">
-                    <span class="text-sm font-bold text-gray-700">${formatDateWithDay(d)}</span>
-                    <button class="remove-dup-date text-gray-300 hover:text-red-500 font-black text-lg" data-index="${i}">×</button>
-                </div>
-            `).join('');
-
-            container.querySelectorAll('.remove-dup-date').forEach(btn =>
-                btn.addEventListener('click', () => {
-                    targetDates.splice(parseInt(btn.dataset.index), 1);
-                    renderDuplicateDates();
-                }));
-        }
-
-        function addDuplicateDate() {
-            const input = document.getElementById('dup-date-input');
-            const val = input.value;
-            if (!val) return;
-            if (targetDates.includes(val)) {
-                Swal.fire({ toast: true, position: 'top', icon: 'warning', title: 'Date already added', showConfirmButton: false, timer: 1500 });
-                return;
-            }
-            targetDates.push(val);
-            targetDates.sort(); // keep list chronological
-            input.value = '';
-            renderDuplicateDates();
-        }
-
-        async function createDuplicateSessions() {
-            if (targetDates.length === 0) {
-                Swal.fire('No Dates', 'Please add at least one target date.', 'warning');
-                return;
-            }
-
-            const source = state.allData.find(x => x.id === duplicateSourceId);
-            if (!source) return;
-
-            const { isConfirmed } = await Swal.fire({
-                title: 'Create Sessions?',
-                text: `This will create ${targetDates.length} new session${targetDates.length > 1 ? 's' : ''}, each starting as Hidden (Private) with no players.`,
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonColor: '#7c3aed',
-                confirmButtonText: 'Yes, create them',
-                customClass: { popup: 'rounded-3xl' }
-            });
-            if (!isConfirmed) return;
-
-            const rowsToInsert = targetDates.map(date => ({
-                date,
-                start_time:          source.start_time,
-                end_time:            source.end_time,
-                location:            source.location,
-                capacity:            source.capacity,
-                fee:                 source.fee,
-                payment_method:      source.payment_method || null,
-                special_instruction: source.special_instruction || null,
-                admin_notes:         source.admin_notes || null,
-                status:              'Scheduled',
-                is_visible:          false, // always hidden — goes through normal reveal flow
-                is_deleted:          false
-            }));
-
-            const { data: created, error } = await _supabase
-                .from('sessions')
-                .insert(rowsToInsert)
-                .select('id, date');
-
-            if (error) {
-                Swal.fire('Error', `Failed to create sessions: ${error.message}`, 'error');
-                return;
-            }
-
-            // Log one audit entry per created session, consistent with
-            // SESSION_CREATED entries from the manual editor flow.
-            const currentAdmin = state.adminName || 'Admin';
-            for (const newSession of (created || [])) {
-                await logAction(
-                    'SESSION_CREATED',
-                    `${currentAdmin} duplicated session from ${source.date} to ${newSession.date}`,
-                    currentAdmin,
-                    newSession.id
-                );
-            }
-
-            Swal.fire({
-                toast: true, position: 'top', icon: 'success',
-                title: `${created.length} session${created.length > 1 ? 's' : ''} created!`,
-                showConfirmButton: false, timer: 2000
-            });
-
-            closeDuplicator();
-            await loadData();
-            renderAdminLists();
-            setTab('hidden'); // new sessions land in Hidden tab since is_visible = false
-        }
-
         document.getElementById('new-session-btn').addEventListener('click', () => showSessionForm());
         document.getElementById('cancel-editor-btn').addEventListener('click', closeEditor);
         document.getElementById('save-session-btn').addEventListener('click', saveSession);
-        document.getElementById('dup-cancel-btn').addEventListener('click', closeDuplicator);
-        document.getElementById('dup-add-date-btn').addEventListener('click', addDuplicateDate);
-        document.getElementById('dup-date-input').addEventListener('keydown', e => { if (e.key === 'Enter') addDuplicateDate(); });
-        document.getElementById('dup-create-btn').addEventListener('click', createDuplicateSessions);
 
         // --- init ---
         (async () => {

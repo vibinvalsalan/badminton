@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+    <title>My Sessions | Badminton</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        .animate-fadeIn { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans text-gray-900">
+
+    <nav class="bg-blue-600 text-white p-4 shadow-lg sticky top-0 z-50 flex justify-between items-center">
+        <div class="flex items-center gap-3">
+            <a href="index.html" class="p-1 hover:bg-blue-700 rounded-full transition-colors">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+            </a>
+            <h1 class="font-black tracking-tight text-lg uppercase">🏸 My Sessions</h1>
+        </div>
+    </nav>
+
+    <div class="container mx-auto p-4 max-w-lg space-y-4">
+
+        <!-- Player picker -->
+        <div class="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm">
+            <p class="text-[10px] font-black text-gray-400 uppercase mb-2">Who are you?</p>
+            <div class="relative">
+                <input type="text" id="player-search-input" autocomplete="off"
+                    placeholder="Type your name..."
+                    class="w-full bg-gray-50 rounded-2xl px-4 py-3 outline-none text-sm border-2 border-transparent transition-all">
+                <input type="hidden" id="selected-player-id">
+                <div id="player-suggestions"
+                    class="hidden absolute z-20 left-0 right-0 mt-1 bg-white rounded-2xl shadow-xl border border-gray-100 max-h-56 overflow-y-auto"></div>
+            </div>
+        </div>
+
+        <!-- Results — hidden until a player is selected -->
+        <div id="player-results" class="hidden space-y-4 animate-fadeIn">
+
+            <div class="flex items-center justify-between">
+                <h2 id="player-greeting" class="text-xl font-black"></h2>
+                <button id="change-player-btn" class="text-[10px] font-black text-gray-400 uppercase hover:text-blue-600 transition-colors">Change</button>
+            </div>
+
+            <!-- Upcoming -->
+            <div>
+                <div class="flex items-center justify-between mb-2">
+                    <p class="text-[10px] font-black text-gray-400 uppercase">Upcoming Sessions</p>
+                    <span id="upcoming-badge" class="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">0</span>
+                </div>
+                <div id="upcoming-list" class="space-y-3"></div>
+            </div>
+
+            <!-- Past -->
+            <div>
+                <div class="flex items-center justify-between mb-2">
+                    <p class="text-[10px] font-black text-gray-400 uppercase">Past Sessions</p>
+                    <span id="past-badge" class="text-[10px] font-black text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">0</span>
+                </div>
+                <div id="past-list" class="space-y-3"></div>
+            </div>
+        </div>
+
+        <!-- Loading state -->
+        <div id="loading-state" class="hidden text-center py-12 text-gray-400 font-bold uppercase text-[10px]">
+            Loading your sessions...
+        </div>
+
+    </div>
+
+    <script type="module">
+        import { _supabase } from './js/supabase-client.js';
+        import { state } from './js/state.js';
+        import { loadData } from './js/data.js';
+        import { formatDateWithDay, formatTime12Hour } from './js/format.js';
+        import { logVisit, logAction } from './js/audit.js';
+
+        // --- Player search combobox ---
+        function setupCombobox() {
+            const searchInput = document.getElementById('player-search-input');
+            const hiddenId = document.getElementById('selected-player-id');
+            const suggestionsBox = document.getElementById('player-suggestions');
+
+            function renderSuggestions(query) {
+                const q = query.trim().toLowerCase();
+                const matches = q
+                    ? state.masterPlayers.filter(p => p.name.toLowerCase().includes(q))
+                    : state.masterPlayers;
+
+                if (matches.length === 0) {
+                    suggestionsBox.innerHTML = `<p class="text-xs text-gray-400 italic px-4 py-3">No matching players</p>`;
+                } else {
+                    suggestionsBox.innerHTML = matches.map(p => `
+                        <button type="button" data-id="${p.id}" data-name="${p.name}"
+                            class="suggestion-item w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 transition-colors font-medium">
+                            ${p.name}
+                        </button>
+                    `).join('');
+                }
+                suggestionsBox.classList.remove('hidden');
+
+                suggestionsBox.querySelectorAll('.suggestion-item').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        hiddenId.value = btn.dataset.id;
+                        searchInput.value = btn.dataset.name;
+                        suggestionsBox.classList.add('hidden');
+                        // Log each name selection so admin can see which
+                        // players are being looked up and how frequently.
+                        logAction('PLAYER_PROFILE_VIEWED', `Player sessions viewed for: ${btn.dataset.name}`, btn.dataset.name, null, btn.dataset.id);
+                        loadPlayerSessions(btn.dataset.id, btn.dataset.name);
+                    });
+                });
+            }
+
+            searchInput.addEventListener('focus', () => renderSuggestions(searchInput.value));
+            searchInput.addEventListener('input', () => {
+                hiddenId.value = '';
+                renderSuggestions(searchInput.value);
+            });
+
+            document.addEventListener('click', e => {
+                if (!searchInput.contains(e.target) && !suggestionsBox.contains(e.target)) {
+                    suggestionsBox.classList.add('hidden');
+                }
+            });
+        }
+
+        // --- Load and display sessions for selected player ---
+        async function loadPlayerSessions(playerId, playerName) {
+            document.getElementById('player-results').classList.add('hidden');
+            document.getElementById('loading-state').classList.remove('hidden');
+
+            const today = new Date().toISOString().split('T')[0];
+
+            const [{ data: upcoming, error: upcomingError }, { data: history, error: historyError }] = await Promise.all([
+                // Upcoming: raw registrations joined to sessions.
+                // Only Scheduled + Cancelled sessions (not Completed).
+                // Hidden sessions (is_visible = false) are excluded — players
+                // should not be able to see sessions not yet made public,
+                // even if they somehow have a registration on one.
+                _supabase
+                    .from('registrations')
+                    .select('status, sessions(id, date, start_time, end_time, location, status, is_visible, fee)')
+                    .eq('player_id', playerId)
+                    .gt('sessions.date', today),
+
+                // Past: from player_session_history view which already filters
+                // to Confirmed + Completed sessions only.
+                _supabase
+                    .from('player_session_history')
+                    .select('*')
+                    .eq('player_id', playerId)
+                    .order('session_date', { ascending: false })
+            ]);
+
+            document.getElementById('loading-state').classList.add('hidden');
+
+            // Filter upcoming: exclude null sessions (PostgREST quirk with
+            // nested filters), exclude hidden sessions, exclude Completed,
+            // and sort by date ascending.
+            const upcomingRows = (upcomingError ? [] : (upcoming || []))
+                .filter(r => r.sessions && r.sessions.is_visible !== false)
+                .filter(r => r.sessions.status === 'Scheduled' || r.sessions.status === 'Cancelled')
+                .map(r => ({ ...r.sessions, registration_status: r.status }))
+                .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+            const pastRows = historyError ? [] : (history || []);
+
+            renderUpcoming(upcomingRows);
+            renderPast(pastRows);
+
+            document.getElementById('player-greeting').innerText = `Hi, ${playerName}!`;
+            document.getElementById('player-results').classList.remove('hidden');
+        }
+
+        function renderUpcoming(rows) {
+            const container = document.getElementById('upcoming-list');
+            document.getElementById('upcoming-badge').innerText = rows.length;
+
+            if (rows.length === 0) {
+                container.innerHTML = `
+                    <div class="bg-white p-6 rounded-2xl border border-gray-100 text-center">
+                        <p class="text-gray-400 italic text-sm">No upcoming sessions.</p>
+                    </div>`;
+                return;
+            }
+
+            container.innerHTML = rows.map(s => {
+                const displayTime = (s.start_time && s.end_time)
+                    ? `${formatTime12Hour(s.start_time)} - ${formatTime12Hour(s.end_time)}`
+                    : 'N/A';
+
+                const regBadge = s.registration_status === 'Waitlist'
+                    ? `<span class="text-[9px] font-black bg-orange-50 text-orange-600 border border-orange-200 uppercase px-2 py-0.5 rounded-md">Waitlist</span>`
+                    : `<span class="text-[9px] font-black bg-green-50 text-green-600 border border-green-200 uppercase px-2 py-0.5 rounded-md">Confirmed</span>`;
+
+                const cancelledTag = s.status === 'Cancelled'
+                    ? `<span class="text-[9px] font-black bg-red-50 text-red-600 border border-red-200 uppercase px-2 py-0.5 rounded-md ml-1">Cancelled</span>`
+                    : '';
+
+                return `
+                    <a href="session.html?session=${s.id}"
+                        class="block bg-white p-4 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md active:scale-[0.98] transition-all">
+                        <div class="flex justify-between items-start mb-2">
+                            <div>
+                                <p class="text-[10px] font-black text-blue-600 uppercase">${formatDateWithDay(s.date)}</p>
+                                <p class="font-black text-gray-900 text-lg leading-tight">${displayTime}</p>
+                                <p class="text-xs text-gray-400 font-medium mt-0.5">${s.location}</p>
+                            </div>
+                            <div class="flex flex-col items-end gap-1">
+                                ${regBadge}${cancelledTag}
+                                <span class="text-xs font-bold text-blue-600 mt-1">${s.fee || ''}</span>
+                            </div>
+                        </div>
+                        <p class="text-[10px] text-gray-300 font-bold uppercase mt-1">Tap to view session →</p>
+                    </a>`;
+            }).join('');
+        }
+
+        function renderPast(rows) {
+            const container = document.getElementById('past-list');
+            document.getElementById('past-badge').innerText = rows.length;
+
+            if (rows.length === 0) {
+                container.innerHTML = `
+                    <div class="bg-white p-6 rounded-2xl border border-gray-100 text-center">
+                        <p class="text-gray-400 italic text-sm">No past sessions yet.</p>
+                    </div>`;
+                return;
+            }
+
+            container.innerHTML = rows.map(h => `
+                <div class="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex justify-between items-center">
+                    <div>
+                        <p class="text-[10px] font-black text-gray-400 uppercase">${formatDateWithDay(h.session_date)}</p>
+                        <p class="font-bold text-gray-800 text-sm mt-0.5">${h.session_time}</p>
+                    </div>
+                    <span class="text-[9px] font-bold text-gray-400 uppercase text-right max-w-[120px] truncate">${h.session_location}</span>
+                </div>`).join('');
+        }
+
+        // "Change" button resets to the picker
+        document.getElementById('change-player-btn').addEventListener('click', () => {
+            document.getElementById('player-results').classList.add('hidden');
+            document.getElementById('selected-player-id').value = '';
+            document.getElementById('player-search-input').value = '';
+            document.getElementById('player-search-input').focus();
+        });
+
+        // --- Init ---
+        (async () => {
+            await logVisit();
+            await loadData();
+            setupCombobox();
+        })();
+    </script>
+</body>
+</html>

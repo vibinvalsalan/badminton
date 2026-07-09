@@ -512,7 +512,7 @@
                     .from('registrations')
                     .select('status, sessions(id, date, start_time, end_time, location, status)')
                     .eq('player_id', playerId)
-                    .gt('sessions.date', today),
+                    .gte('sessions.date', today),
                 _supabase.from('player_notes').select('*').eq('player_id', playerId).order('created_at', { ascending: false })
             ]);
 

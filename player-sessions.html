@@ -146,7 +146,7 @@
                     .from('registrations')
                     .select('status, sessions(id, date, start_time, end_time, location, status, is_visible, fee)')
                     .eq('player_id', playerId)
-                    .gt('sessions.date', today),
+                    .gte('sessions.date', today),
 
                 // Past: from player_session_history view which already filters
                 // to Confirmed + Completed sessions only.

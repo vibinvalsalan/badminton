@@ -46,7 +46,7 @@
         // function referenced by onclick="fn()" in innerHTML must be explicitly
         // attached to window.
         window.handlePayment    = (id, status)          => handlePayment(id, status, refresh);
-        window.handleRemoval    = (id, sid, name)        => handleRemoval(id, sid, name, refresh);
+        window.handleRemoval    = (id, sid, name, playerId, paymentStatus) => handleRemoval(id, sid, name, playerId, paymentStatus, refresh);
         window.promoteFromWaitlist = (id, sid, name)     => promoteFromWaitlist(id, sid, name, refresh);
         window.toggleJoinButton = toggleJoinButton;
         window.validateAndJoin  = ()                     => validateAndJoin(refresh);
@@ -195,7 +195,7 @@
                                             Promote
                                         </button>
                                     ` : ''}
-                                    <button onclick="handleRemoval('${p.id}', '${s.id}', '${p.player_name}')"
+                                    <button onclick="handleRemoval('${p.id}', '${s.id}', '${p.player_name}', '${p.player_id}', '${p.payment_status}')"
                                         class="text-red-200 hover:text-red-400 transition-colors pl-2 border-l border-gray-200">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                                     </button>

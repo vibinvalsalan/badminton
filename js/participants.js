@@ -27,7 +27,7 @@ export function renderPlayerRow(p, s) {
                         Mark Paid
                     </button>
                 `}
-                <button onclick="handleRemoval('${p.id}', '${s.id}', '${p.player_name}')"
+                <button onclick="handleRemoval('${p.id}', '${s.id}', '${p.player_name}', '${p.player_id}', '${p.payment_status}')"
                     class="text-gray-300 hover:text-red-500 transition-all p-2 ml-2 rounded-full hover:bg-red-50">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -59,10 +59,74 @@ export async function handlePayment(id, currentStatus, onComplete) {
     }
 }
 
-export async function handleRemoval(regId, sid, name, onComplete) {
+// Finds the nearest upcoming Scheduled session (hidden sessions included --
+// admins routinely bulk-add players before a session is revealed, so those
+// count as valid transfer targets) that has a free confirmed spot and where
+// this player isn't already confirmed or waitlisted, then registers them
+// there as Paid. Used by handleRemoval when transferring a pre-paid player
+// who dropped from a session. Does not fall back to waitlisting a full
+// session -- it skips forward to the next one with room instead.
+async function reassignPlayerToNextSession(playerId, playerName, excludeSessionId, performer) {
+    if (!playerId) {
+        return { success: false, reason: "no linked player record on that registration, couldn't auto-move them." };
+    }
+
+    const today = new Date().setHours(0, 0, 0, 0);
+
+    const candidates = state.allData
+        .filter(s => s.id !== excludeSessionId)
+        .filter(s => s.status === 'Scheduled')
+        .filter(s => new Date(s.date).setHours(0, 0, 0, 0) >= today)
+        .filter(s => s.players.length < s.capacity)
+        .filter(s => !s.players.some(p => p.player_id == playerId) && !s.waitlist.some(p => p.player_id == playerId))
+        .sort((a, b) => new Date(a.date) - new Date(b.date) || (a.start_time || '').localeCompare(b.start_time || ''));
+
+    const target = candidates[0];
+    if (!target) {
+        return { success: false, reason: 'no upcoming session with a free spot was found -- add them manually later.' };
+    }
+
+    const { error } = await _supabase.from('registrations').insert([{
+        session_id: target.id,
+        player_id: playerId,
+        player_name: playerName,
+        status: 'Confirmed',
+        payment_status: 'Paid'
+    }]);
+
+    if (error) {
+        return { success: false, reason: 'removed, but could not add them to the next session -- add them manually.' };
+    }
+
+    const displayTime = (target.start_time && target.end_time)
+        ? `${formatTime12Hour(target.start_time)} - ${formatTime12Hour(target.end_time)}`
+        : 'N/A';
+
+    await logAction(
+        'PLAYER_JOINED_SESSION',
+        `${performer} moved ${playerName} to session on ${target.date} (${displayTime}) after removal from a previous session (pre-paid transfer)`,
+        playerName,
+        target.id,
+        playerId
+    );
+
+    return { success: true, session: target };
+}
+
+export async function handleRemoval(regId, sid, name, playerId, paymentStatus, onComplete) {
+    const isPaid = paymentStatus === 'Paid';
+
     const result = await Swal.fire({
         title: 'Remove Player?',
-        html: `Are you sure you want to remove <b>${name}</b>?<br><small class="text-gray-500">This will free up their spot for someone else.</small>`,
+        html: `
+            Are you sure you want to remove <b>${name}</b>?<br><small class="text-gray-500">This will free up their spot for someone else.</small>
+            ${isPaid ? `
+                <label class="flex items-center gap-2 mt-4 p-3 bg-blue-50 rounded-xl text-sm text-left cursor-pointer">
+                    <input type="checkbox" id="reassign-checkbox" checked class="w-4 h-4 accent-blue-600 flex-shrink-0">
+                    <span>They've already paid -- move them to the next available session</span>
+                </label>
+            ` : ''}
+        `,
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#ef4444',
@@ -74,6 +138,10 @@ export async function handleRemoval(regId, sid, name, onComplete) {
             popup: 'rounded-3xl',
             confirmButton: 'rounded-xl px-6 py-3 text-sm font-bold uppercase',
             cancelButton: 'rounded-xl px-6 py-3 text-sm font-bold uppercase'
+        },
+        preConfirm: () => {
+            const cb = document.getElementById('reassign-checkbox');
+            return { reassign: isPaid && !!cb && cb.checked };
         }
     });
 
@@ -97,11 +165,32 @@ export async function handleRemoval(regId, sid, name, onComplete) {
 
         if (!error) {
             await logAction('PLAYER_REMOVED', logDetails, name, sid);
+
+            const wantsReassign = result.value && result.value.reassign;
+            const reassignResult = wantsReassign
+                ? await reassignPlayerToNextSession(playerId, name, sid, performer)
+                : null;
+
             if (onComplete) await onComplete();
-            Swal.fire({
-                toast: true, position: 'top', icon: 'success',
-                title: 'Player removed successfully', showConfirmButton: false, timer: 1500
-            });
+
+            if (reassignResult && reassignResult.success) {
+                Swal.fire({
+                    toast: true, position: 'top', icon: 'success',
+                    title: `Removed & moved to ${formatDateWithDay(reassignResult.session.date)}`,
+                    showConfirmButton: false, timer: 2500
+                });
+            } else if (reassignResult && !reassignResult.success) {
+                Swal.fire({
+                    toast: true, position: 'top', icon: 'warning',
+                    title: `Removed. ${reassignResult.reason}`,
+                    showConfirmButton: false, timer: 3500
+                });
+            } else {
+                Swal.fire({
+                    toast: true, position: 'top', icon: 'success',
+                    title: 'Player removed successfully', showConfirmButton: false, timer: 1500
+                });
+            }
         } else {
             Swal.fire('Error', 'Could not remove player. Please try again.', 'error');
         }

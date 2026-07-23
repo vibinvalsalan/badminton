@@ -12,14 +12,9 @@ export function copyToWhatsApp() {
 
     const venueInfo = VENUES.find(v => v.name === s.location);
 
-    // NOTE: original SPA code referenced an undefined `session` variable in
-    // this fallback branch (should have been `s.location`). Preserved as-is;
-    // this line will throw a ReferenceError if venueInfo isn't found, i.e.
-    // whenever a session's location string doesn't exactly match a VENUES
-    // entry name (e.g. legacy sessions, or any free-text location).
     const locationDetails = venueInfo
         ? `${venueInfo.name}\n${venueInfo.address}`
-        : session.location;
+        : s.location;
 
     const formattedStart = formatTime12Hour(s.start_time);
     const formattedEnd = formatTime12Hour(s.end_time);
@@ -32,6 +27,6 @@ export function copyToWhatsApp() {
     // project subpath like /badminton/. session.html is always a sibling
     // of whichever page calls this function.
     const basePath = window.location.pathname.replace(/[^/]*$/, '');
-    msg += `\n\nClick the link below to join or drop from session:\n${window.location.origin}${basePath}session.html?session=${s.id}`;
+    msg += `\n\nClick the link below to join or drop from session:\n${window.location.origin}${basePath}session.html?session=${s.short_id}`;
     navigator.clipboard.writeText(msg).then(() => Swal.fire({ toast: true, position: 'top', icon: 'success', title: 'Copied to clipboard!', showConfirmButton: false, timer: 1500 }));
 }

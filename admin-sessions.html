@@ -245,7 +245,7 @@
                         <p class="text-[10px] text-gray-400 font-bold uppercase">${s.location} • Fee: ${s.fee} • Paid: ${paidCount}/${s.players.length}</p>
                     </div>
                     <div class="flex gap-2">
-                        <a href="session.html?session=${s.id}" class="bg-blue-50 text-blue-700 font-bold text-[10px] px-3 py-2 rounded-xl">View</a>
+                        <a href="session.html?session=${s.short_id}" class="bg-blue-50 text-blue-700 font-bold text-[10px] px-3 py-2 rounded-xl">View</a>
                         <button class="edit-session-btn bg-gray-50 text-gray-600 font-bold text-[10px] px-3 py-2 rounded-xl" data-id="${s.id}">Edit</button>
                         <button class="dup-session-btn bg-purple-50 text-purple-700 font-bold text-[10px] px-3 py-2 rounded-xl" data-id="${s.id}">Dup</button>
                         <button class="delete-session-btn text-red-300 px-2" data-id="${s.id}">×</button>

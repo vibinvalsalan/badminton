@@ -62,7 +62,7 @@
             // works whether the site is served from a domain root or from
             // a GitHub Pages project subpath like /badminton/.
             const basePath = window.location.pathname.replace(/[^/]*$/, '');
-            const directLink = `${window.location.origin}${basePath}session.html?session=${s.id}`;
+            const directLink = `${window.location.origin}${basePath}session.html?session=${s.short_id}`;
 
             if (navigator.share) {
                 navigator.share({
@@ -284,14 +284,19 @@
             await logVisit();
             await loadData();
 
-            const sessionId = new URLSearchParams(window.location.search).get('session');
-            if (!sessionId) {
+            const shortId = new URLSearchParams(window.location.search).get('session');
+            const s = shortId ? state.allData.find(x => x.short_id === shortId) : null;
+            if (!s) {
                 document.getElementById('loading-state').classList.add('hidden');
                 document.getElementById('error-state').classList.remove('hidden');
                 return;
             }
 
-            state.currentSessionId = sessionId;
+            // Downstream code (renderPlayerRow, handlePayment, handleRemoval,
+            // audit logging, etc.) all key off state.currentSessionId and
+            // write it as the session_id foreign key, so it must hold the
+            // real UUID -- never the short code from the URL.
+            state.currentSessionId = s.id;
 
             // Show Admin nav button if logged in as admin
             if (state.isAdmin) {

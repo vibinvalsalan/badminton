@@ -33,6 +33,19 @@ export const LOCKED_REMOVAL_MESSAGE =
     `Names can only be removed more than ${REMOVAL_LOCK_HOURS} hours before the session. ` +
     `Please contact an admin if you can no longer make it.`;
 
+// Shown when a player taps the lock icon (or otherwise tries to remove a
+// name inside the 24h window).
+export function showRemovalLocked() {
+    return Swal.fire({
+        icon: 'info',
+        title: 'Removal locked',
+        text: LOCKED_REMOVAL_MESSAGE,
+        confirmButtonText: 'OK',
+        confirmButtonColor: '#2563eb',
+        customClass: { popup: 'rounded-3xl', confirmButton: 'rounded-xl px-6 py-3 text-sm font-bold uppercase' }
+    });
+}
+
 export function renderPlayerRow(p, s) {
     const removeControl = canRemove(s)
         ? `<button onclick="handleRemoval('${p.id}', '${s.id}', '${p.player_name}', '${p.player_id}', '${p.payment_status}')"
@@ -41,11 +54,11 @@ export function renderPlayerRow(p, s) {
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                     </svg>
                 </button>`
-        : `<span title="${LOCKED_REMOVAL_MESSAGE}" aria-label="Removal locked" class="text-gray-300 p-2 ml-2">
+        : `<button onclick="showRemovalLocked()" title="${LOCKED_REMOVAL_MESSAGE}" aria-label="Removal locked" class="text-gray-300 hover:text-gray-500 transition-all p-2 ml-2 rounded-full">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"></path>
                     </svg>
-                </span>`;
+                </button>`;
     return `
         <div class="group flex justify-between items-center p-3 rounded-xl hover:bg-gray-50 transition-colors border border-transparent">
             <span class="font-semibold text-gray-700">${p.player_name}</span>
@@ -148,13 +161,7 @@ export async function handleRemoval(regId, sid, name, playerId, paymentStatus, o
     // may have been open for hours and the 24h window can open in between.
     const targetSession = state.allData.find(s => s.id === sid);
     if (!canRemove(targetSession)) {
-        await Swal.fire({
-            icon: 'info',
-            title: 'Removal locked',
-            text: LOCKED_REMOVAL_MESSAGE,
-            confirmButtonText: 'OK',
-            customClass: { popup: 'rounded-3xl', confirmButton: 'rounded-xl px-6 py-3 text-sm font-bold uppercase' }
-        });
+        await showRemovalLocked();
         return;
     }
 
@@ -278,12 +285,12 @@ export async function joinSession(onComplete) {
         return;
     }
 
-    // First come, first served: a free spot goes to the waitlist first, so a
-    // player joining themselves is only confirmed if there is room AND
-    // nobody is queued. Admins can add anyone, so for them a free spot is
-    // enough and the queue is ignored.
+    // First come, first served: a free spot goes to the waitlist first, so
+    // anyone added (player or admin) is only confirmed if there is room AND
+    // nobody is queued. Otherwise they join the waitlist, and an admin can
+    // use Promote to move anyone from the waitlist into a free spot.
     const spotFree = confirmedCount < session.capacity;
-    const status = (spotFree && (state.isAdmin || waitlistCount === 0)) ? 'Confirmed' : 'Waitlist';
+    const status = (spotFree && waitlistCount === 0) ? 'Confirmed' : 'Waitlist';
     const jumpedQueueBlocked = status === 'Waitlist' && spotFree;
 
     const { error } = await _supabase.from('registrations').insert([{

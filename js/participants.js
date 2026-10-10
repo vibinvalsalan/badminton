@@ -10,7 +10,42 @@ import { state } from './state.js';
 import { logAction } from './audit.js';
 import { formatTime12Hour, formatDateWithDay } from './format.js';
 
+// Players can only remove a name while the session is MORE than this many
+// hours away. Inside the window (or once it has started), only admins can.
+export const REMOVAL_LOCK_HOURS = 24;
+
+// `date` is a TEXT column (YYYY-MM-DD) and start_time is HH:MM[:SS], so the
+// session start is built from both and read in the browser's local time.
+export function isRemovalLocked(session) {
+    if (!session || !session.date) return false;
+    let time = (session.start_time || '00:00:00').slice(0, 8);
+    if (time.length === 5) time += ':00';
+    const start = new Date(`${session.date}T${time}`);
+    if (isNaN(start.getTime())) return true; // unparseable: fail closed
+    return (start.getTime() - Date.now()) <= REMOVAL_LOCK_HOURS * 60 * 60 * 1000;
+}
+
+export function canRemove(session) {
+    return state.isAdmin || !isRemovalLocked(session);
+}
+
+export const LOCKED_REMOVAL_MESSAGE =
+    `Names can only be removed more than ${REMOVAL_LOCK_HOURS} hours before the session. ` +
+    `Please contact an admin if you can no longer make it.`;
+
 export function renderPlayerRow(p, s) {
+    const removeControl = canRemove(s)
+        ? `<button onclick="handleRemoval('${p.id}', '${s.id}', '${p.player_name}', '${p.player_id}', '${p.payment_status}')"
+                    class="text-gray-300 hover:text-red-500 transition-all p-2 ml-2 rounded-full hover:bg-red-50">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>`
+        : `<span title="${LOCKED_REMOVAL_MESSAGE}" aria-label="Removal locked" class="text-gray-300 p-2 ml-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"></path>
+                    </svg>
+                </span>`;
     return `
         <div class="group flex justify-between items-center p-3 rounded-xl hover:bg-gray-50 transition-colors border border-transparent">
             <span class="font-semibold text-gray-700">${p.player_name}</span>
@@ -27,12 +62,7 @@ export function renderPlayerRow(p, s) {
                         Mark Paid
                     </button>
                 `}
-                <button onclick="handleRemoval('${p.id}', '${s.id}', '${p.player_name}', '${p.player_id}', '${p.payment_status}')"
-                    class="text-gray-300 hover:text-red-500 transition-all p-2 ml-2 rounded-full hover:bg-red-50">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                    </svg>
-                </button>
+                ${removeControl}
             </div>
         </div>`;
 }
@@ -114,6 +144,20 @@ async function reassignPlayerToNextSession(playerId, playerName, excludeSessionI
 }
 
 export async function handleRemoval(regId, sid, name, playerId, paymentStatus, onComplete) {
+    // Re-checked here (not just when the button is drawn) because the page
+    // may have been open for hours and the 24h window can open in between.
+    const targetSession = state.allData.find(s => s.id === sid);
+    if (!canRemove(targetSession)) {
+        await Swal.fire({
+            icon: 'info',
+            title: 'Removal locked',
+            text: LOCKED_REMOVAL_MESSAGE,
+            confirmButtonText: 'OK',
+            customClass: { popup: 'rounded-3xl', confirmButton: 'rounded-xl px-6 py-3 text-sm font-bold uppercase' }
+        });
+        return;
+    }
+
     const isPaid = paymentStatus === 'Paid';
 
     const result = await Swal.fire({

@@ -38,7 +38,7 @@
         import { formatDateWithDay, formatTime12Hour } from './js/format.js';
         import { logVisit } from './js/audit.js';
         import { toggleSessionLogs } from './js/audit.js';
-        import { renderPlayerRow, handlePayment, handleRemoval, promoteFromWaitlist, joinSession, toggleJoinButton, validateAndJoin, filterPlayers, canRemove, LOCKED_REMOVAL_MESSAGE } from './js/participants.js';
+        import { renderPlayerRow, handlePayment, handleRemoval, promoteFromWaitlist, joinSession, toggleJoinButton, validateAndJoin, filterPlayers, canRemove, showRemovalLocked, LOCKED_REMOVAL_MESSAGE } from './js/participants.js';
         import { copyToWhatsApp } from './js/whatsapp.js';
 
         // Expose functions needed by inline onclick handlers in rendered HTML.
@@ -48,6 +48,7 @@
         window.handlePayment    = (id, status)          => handlePayment(id, status, refresh);
         window.handleRemoval    = (id, sid, name, playerId, paymentStatus) => handleRemoval(id, sid, name, playerId, paymentStatus, refresh);
         window.promoteFromWaitlist = (id, sid, name)     => promoteFromWaitlist(id, sid, name, refresh);
+        window.showRemovalLocked = showRemovalLocked;
         window.toggleJoinButton = toggleJoinButton;
         window.validateAndJoin  = ()                     => validateAndJoin(refresh);
         window.filterPlayers    = filterPlayers;
@@ -201,9 +202,9 @@
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                                     </button>
                                     ` : `
-                                    <span title="${LOCKED_REMOVAL_MESSAGE}" aria-label="Removal locked" class="text-gray-300 pl-2 border-l border-gray-200">
+                                    <button onclick="showRemovalLocked()" title="${LOCKED_REMOVAL_MESSAGE}" aria-label="Removal locked" class="text-gray-300 hover:text-gray-500 transition-colors pl-2 border-l border-gray-200">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"></path></svg>
-                                    </span>
+                                    </button>
                                     `}
                                 </div>
                             </div>

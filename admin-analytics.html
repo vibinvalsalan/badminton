@@ -69,19 +69,31 @@
 
         let allVisits = [];
 
-        async function fetchVisits() {
-            const { data, error } = await _supabase
-                .from('audit_logs')
-                .select('visitor_id, device_type, created_at')
-                .eq('action', 'UNIQUE_ACCESS')
-                .not('visitor_id', 'is', null)
-                .order('created_at', { ascending: true });
+        // Supabase/PostgREST silently caps any single response at 1000 rows.
+        // Without paging, once there were >1000 visit rows the oldest 1000
+        // came back and every newer visit was dropped, so the numbers froze.
+        // Fetch in pages until a short page signals the end.
+        const PAGE_SIZE = 1000;
 
-            if (error) {
-                console.error("Analytics fetch error:", error.message);
-                return;
+        async function fetchVisits() {
+            const rows = [];
+            for (let from = 0; ; from += PAGE_SIZE) {
+                const { data, error } = await _supabase
+                    .from('audit_logs')
+                    .select('visitor_id, device_type, created_at')
+                    .eq('action', 'UNIQUE_ACCESS')
+                    .not('visitor_id', 'is', null)
+                    .order('created_at', { ascending: true })
+                    .range(from, from + PAGE_SIZE - 1);
+
+                if (error) {
+                    console.error("Analytics fetch error:", error.message);
+                    return;
+                }
+                rows.push(...(data || []));
+                if (!data || data.length < PAGE_SIZE) break;
             }
-            allVisits = data || [];
+            allVisits = rows;
             computeAndRender();
         }
 

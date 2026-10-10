@@ -248,7 +248,24 @@ export async function joinSession(onComplete) {
 
     if (!player || !session) return;
 
-    const isAlreadyRegistered = session.players.some(p => p.player_id == player.id);
+    // Read the live registrations rather than trusting state.allData, which
+    // can be hours stale if the page was left open (e.g. a spot has since
+    // opened, or someone else joined the waitlist).
+    const { data: current, error: checkError } = await _supabase
+        .from('registrations')
+        .select('player_id, status')
+        .eq('session_id', session.id);
+
+    if (checkError) {
+        Swal.fire('Error', 'Could not check availability. Please try again.', 'error');
+        return;
+    }
+
+    const confirmedCount = current.filter(r => r.status === 'Confirmed').length;
+    const waitlistCount = current.filter(r => r.status === 'Waitlist').length;
+
+    // Checks the waitlist too, so someone already queued can't join twice.
+    const isAlreadyRegistered = current.some(r => r.player_id == player.id);
 
     if (isAlreadyRegistered) {
         Swal.fire({
@@ -261,7 +278,13 @@ export async function joinSession(onComplete) {
         return;
     }
 
-    const status = session.players.length >= session.capacity ? 'Waitlist' : 'Confirmed';
+    // First come, first served: a free spot goes to the waitlist first, so a
+    // player joining themselves is only confirmed if there is room AND
+    // nobody is queued. Admins can add anyone, so for them a free spot is
+    // enough and the queue is ignored.
+    const spotFree = confirmedCount < session.capacity;
+    const status = (spotFree && (state.isAdmin || waitlistCount === 0)) ? 'Confirmed' : 'Waitlist';
+    const jumpedQueueBlocked = status === 'Waitlist' && spotFree;
 
     const { error } = await _supabase.from('registrations').insert([{
         session_id: session.id,
@@ -284,7 +307,9 @@ export async function joinSession(onComplete) {
         const modalIcon = isConfirmed ? 'success' : 'warning';
         const footerText = isConfirmed
             ? 'See you on the court!'
-            : 'You are now in the waiting list , Check again to see if a spot opens up!';
+            : jumpedQueueBlocked
+                ? 'A spot is free, but players already on the waiting list get it first. You are on the list - check again soon!'
+                : 'You are now in the waiting list , Check again to see if a spot opens up!';
 
         Swal.fire({
             title: isConfirmed ? 'Booking Confirmed!' : 'Added to Waitlist',

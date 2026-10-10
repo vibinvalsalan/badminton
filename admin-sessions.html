@@ -371,13 +371,19 @@
             let logMsg;
             const currentAdmin = state.adminName || localStorage.getItem('adminName') || 'Admin';
 
+            // sData has start_time/end_time, not `time` — the old
+            // `${sData.time}` always logged "undefined".
+            const logTime = (sData.start_time && sData.end_time)
+                ? `${formatTime12Hour(sData.start_time)} - ${formatTime12Hour(sData.end_time)}`
+                : 'N/A';
+
             if (sessionId) {
                 actionType = 'SESSION_UPDATED';
-                logMsg = `${currentAdmin} updated session on ${sData.date} (${sData.time})`;
+                logMsg = `${currentAdmin} updated session on ${sData.date} (${logTime})`;
                 result = await _supabase.from('sessions').update(sData).eq('id', sessionId).select().single();
             } else {
                 actionType = 'SESSION_CREATED';
-                logMsg = `${currentAdmin} created a new session for ${sData.date} (${sData.time}) at ${sData.location}`;
+                logMsg = `${currentAdmin} created a new session for ${sData.date} (${logTime}) at ${sData.location}`;
                 result = await _supabase.from('sessions').insert([sData]).select().single();
             }
 

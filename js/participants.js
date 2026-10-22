@@ -116,17 +116,29 @@ async function reassignPlayerToNextSession(playerId, playerName, excludeSessionI
 
     const today = new Date().setHours(0, 0, 0, 0);
 
+    // A pre-paid player must only roll FORWARD. Without this, any upcoming
+    // session with space qualified, including one earlier than the session
+    // they were just removed from. `date` is YYYY-MM-DD text and start_time
+    // is HH:MM[:SS], so a "date|time" string compares chronologically.
+    const startKey = s => `${s.date}|${(s.start_time || '00:00').slice(0, 5)}`;
+    const removedFrom = state.allData.find(s => s.id === excludeSessionId);
+    const removedKey = removedFrom ? startKey(removedFrom) : null;
+
     const candidates = state.allData
         .filter(s => s.id !== excludeSessionId)
         .filter(s => s.status === 'Scheduled')
         .filter(s => new Date(s.date).setHours(0, 0, 0, 0) >= today)
+        .filter(s => !removedKey || startKey(s) > removedKey)
         .filter(s => s.players.length < s.capacity)
+        // Skip sessions with a waitlist: those free spots belong to the
+        // people already queued, so a transfer must not jump ahead of them.
+        .filter(s => s.waitlist.length === 0)
         .filter(s => !s.players.some(p => p.player_id == playerId) && !s.waitlist.some(p => p.player_id == playerId))
         .sort((a, b) => new Date(a.date) - new Date(b.date) || (a.start_time || '').localeCompare(b.start_time || ''));
 
     const target = candidates[0];
     if (!target) {
-        return { success: false, reason: 'no upcoming session with a free spot was found -- add them manually later.' };
+        return { success: false, reason: 'no later session with a free spot (and no waitlist) was found -- add them manually later.' };
     }
 
     const { error } = await _supabase.from('registrations').insert([{

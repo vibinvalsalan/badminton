@@ -80,20 +80,116 @@ export function renderPlayerRow(p, s) {
         </div>`;
 }
 
+// --- Prepaid pay-ins (player_payments / payment_registrations) --------------
+// These helpers fail soft: if the lookup errors (e.g. the migration hasn't
+// been run yet) they return null, and marking Paid behaves exactly as before.
+
+// Which pay-in (if any) currently covers this registration.
+async function getPaymentLink(registrationId) {
+    const { data, error } = await _supabase
+        .from('payment_registrations')
+        .select('id, payment_id')
+        .eq('registration_id', registrationId)
+        .maybeSingle();
+    return error ? null : data;
+}
+
+// The player's oldest pay-in that still has sessions left, or null.
+async function findOldestPrepaid(playerId) {
+    const { data, error } = await _supabase
+        .from('player_payments')
+        .select('id, amount, sessions_purchased, paid_on, payment_registrations(id)')
+        .eq('player_id', playerId)
+        .order('paid_on', { ascending: true })
+        .order('created_at', { ascending: true });
+    if (error || !data) return null;
+
+    const open = data
+        .map(p => ({ payment: p, used: p.payment_registrations.length }))
+        .filter(x => x.used < x.payment.sessions_purchased);
+    if (open.length === 0) return null;
+
+    const { payment, used } = open[0];
+    return { payment, used, remaining: payment.sessions_purchased - used };
+}
+
 export async function handlePayment(id, currentStatus, onComplete) {
     const newStatus = currentStatus === 'Paid' ? 'Unpaid' : 'Paid';
 
     const session = state.allData.find(s => s.registrations.some(r => r.id == id));
     const reg = session.registrations.find(r => r.id == id);
 
+    // Admin marking Paid: offer to use one of the player's prepaid sessions.
+    // Players marking themselves paid never touch pay-in records.
+    let prepaid = null;
+    if (newStatus === 'Paid' && state.isAdmin && reg.player_id) {
+        const credit = await findOldestPrepaid(reg.player_id);
+        if (credit) {
+            const choice = await Swal.fire({
+                title: 'Use a prepaid session?',
+                html: `<b>${reg.player_name}</b> has <b>${credit.remaining}</b> prepaid session${credit.remaining === 1 ? '' : 's'} left
+                       <br><small class="text-gray-500">£${Number(credit.payment.amount).toFixed(2)} for ${credit.payment.sessions_purchased} sessions, paid ${credit.payment.paid_on.split('-').reverse().join('/')}. This would be session ${credit.used + 1} of ${credit.payment.sessions_purchased}.</small>`,
+                icon: 'question',
+                showDenyButton: true,
+                showCancelButton: true,
+                confirmButtonText: 'Yes, use prepaid',
+                denyButtonText: 'No, mark paid normally',
+                cancelButtonText: 'Cancel',
+                confirmButtonColor: '#2563eb',
+                denyButtonColor: '#6b7280',
+                cancelButtonColor: '#9ca3af',
+                customClass: { popup: 'rounded-3xl' }
+            });
+            if (choice.isDismissed) return; // Cancel: change nothing
+            if (choice.isConfirmed) prepaid = credit;
+        }
+    }
+
+    // Reverting to Unpaid: if a pay-in covers this registration, release it.
+    let existingLink = null;
+    if (newStatus === 'Unpaid') {
+        existingLink = await getPaymentLink(id);
+        if (existingLink && !state.isAdmin) {
+            Swal.fire({
+                icon: 'info',
+                title: 'Covered by a prepaid payment',
+                text: 'This session was paid from a prepaid bundle. Please ask an admin if it needs changing.',
+                customClass: { popup: 'rounded-3xl' }
+            });
+            return;
+        }
+    }
+
     const { error } = await _supabase.from('registrations')
         .update({ payment_status: newStatus })
         .eq('id', id);
 
     if (!error) {
+        let linkNote = '';
+
+        if (prepaid) {
+            const { error: linkError } = await _supabase.from('payment_registrations').insert([{
+                payment_id: prepaid.payment.id,
+                registration_id: id,
+                linked_by: state.adminName
+            }]);
+            if (linkError) {
+                // Don't leave it Paid-but-unlinked after the admin chose prepaid.
+                await _supabase.from('registrations').update({ payment_status: currentStatus }).eq('id', id);
+                Swal.fire('Error', 'Could not use the prepaid session, so nothing was changed. Please try again.', 'error');
+                return;
+            }
+            linkNote = ` using a prepaid session (${prepaid.used + 1} of ${prepaid.payment.sessions_purchased})`;
+        }
+
+        if (existingLink) {
+            await _supabase.from('payment_registrations').delete().eq('id', existingLink.id);
+            linkNote = ' (prepaid session returned)';
+        }
+
         const action = newStatus === 'Paid' ? 'PLAYER_PAID' : 'PLAYER_UNPAID';
         const actionVerb = state.isAdmin ? `${state.adminName} updated ${reg.player_name} as` : `${reg.player_name} marked as`;
-        const detailMsg = `${actionVerb} ${newStatus} for session on ${session.date}`;
+        const detailMsg = `${actionVerb} ${newStatus}${linkNote} for session on ${session.date}`;
 
         await logAction(action, detailMsg, reg.player_name, session.id, reg.player_id);
         if (onComplete) await onComplete();
@@ -109,7 +205,7 @@ export async function handlePayment(id, currentStatus, onComplete) {
 // there as Paid. Used by handleRemoval when transferring a pre-paid player
 // who dropped from a session. Does not fall back to waitlisting a full
 // session -- it skips forward to the next one with room instead.
-async function reassignPlayerToNextSession(playerId, playerName, excludeSessionId, performer) {
+async function reassignPlayerToNextSession(playerId, playerName, excludeSessionId, performer, paymentId = null) {
     if (!playerId) {
         return { success: false, reason: "no linked player record on that registration, couldn't auto-move them." };
     }
@@ -141,16 +237,28 @@ async function reassignPlayerToNextSession(playerId, playerName, excludeSessionI
         return { success: false, reason: 'no later session with a free spot (and no waitlist) was found -- add them manually later.' };
     }
 
-    const { error } = await _supabase.from('registrations').insert([{
+    const { data: newReg, error } = await _supabase.from('registrations').insert([{
         session_id: target.id,
         player_id: playerId,
         player_name: playerName,
         status: 'Confirmed',
         payment_status: 'Paid'
-    }]);
+    }]).select('id').single();
 
     if (error) {
         return { success: false, reason: 'removed, but could not add them to the next session -- add them manually.' };
+    }
+
+    // If the session they left was covered by a prepaid pay-in, the same
+    // pay-in now covers the new session, so its used count stays the same.
+    let carried = false;
+    if (paymentId && newReg) {
+        const { error: linkError } = await _supabase.from('payment_registrations').insert([{
+            payment_id: paymentId,
+            registration_id: newReg.id,
+            linked_by: performer
+        }]);
+        carried = !linkError;
     }
 
     const displayTime = (target.start_time && target.end_time)
@@ -159,13 +267,13 @@ async function reassignPlayerToNextSession(playerId, playerName, excludeSessionI
 
     await logAction(
         'PLAYER_JOINED_SESSION',
-        `${performer} moved ${playerName} to session on ${target.date} (${displayTime}) after removal from a previous session (pre-paid transfer)`,
+        `${performer} moved ${playerName} to session on ${target.date} (${displayTime}) after removal from a previous session (pre-paid transfer${carried ? ', prepaid session carried over' : ''})`,
         playerName,
         target.id,
         playerId
     );
 
-    return { success: true, session: target };
+    return { success: true, session: target, carried, linkFailed: !!paymentId && !carried };
 }
 
 export async function handleRemoval(regId, sid, name, playerId, paymentStatus, onComplete) {
@@ -224,34 +332,42 @@ export async function handleRemoval(regId, sid, name, playerId, paymentStatus, o
             ? `${performer} removed ${name} from session on ${session.date} (${displayTime})`
             : `${performer} removed ${name} from session ID: ${sid}`;
 
+        // Read the prepaid link BEFORE deleting: deleting the registration
+        // removes its link row automatically, which is what gives the session
+        // credit back to the pay-in.
+        const prepaidLink = await getPaymentLink(regId);
+
         const { error } = await _supabase.from('registrations').delete().eq('id', regId);
 
         if (!error) {
-            await logAction('PLAYER_REMOVED', logDetails, name, sid);
+            await logAction('PLAYER_REMOVED', prepaidLink ? `${logDetails} (prepaid session returned)` : logDetails, name, sid);
 
             const wantsReassign = result.value && result.value.reassign;
             const reassignResult = wantsReassign
-                ? await reassignPlayerToNextSession(playerId, name, sid, performer)
+                ? await reassignPlayerToNextSession(playerId, name, sid, performer, prepaidLink ? prepaidLink.payment_id : null)
                 : null;
 
             if (onComplete) await onComplete();
 
             if (reassignResult && reassignResult.success) {
                 Swal.fire({
-                    toast: true, position: 'top', icon: 'success',
-                    title: `Removed & moved to ${formatDateWithDay(reassignResult.session.date)}`,
-                    showConfirmButton: false, timer: 2500
+                    toast: true, position: 'top', icon: reassignResult.linkFailed ? 'warning' : 'success',
+                    title: `Removed & moved to ${formatDateWithDay(reassignResult.session.date)}` +
+                        (reassignResult.carried ? ' (prepaid session carried over)' : '') +
+                        (reassignResult.linkFailed ? '. Could not carry over the prepaid link, please check Payments.' : ''),
+                    showConfirmButton: false, timer: reassignResult.linkFailed ? 4500 : 2500
                 });
             } else if (reassignResult && !reassignResult.success) {
                 Swal.fire({
                     toast: true, position: 'top', icon: 'warning',
-                    title: `Removed. ${reassignResult.reason}`,
+                    title: `Removed. ${reassignResult.reason}` + (prepaidLink ? ' Their prepaid session was returned.' : ''),
                     showConfirmButton: false, timer: 3500
                 });
             } else {
                 Swal.fire({
                     toast: true, position: 'top', icon: 'success',
-                    title: 'Player removed successfully', showConfirmButton: false, timer: 1500
+                    title: prepaidLink ? 'Player removed (prepaid session returned)' : 'Player removed successfully',
+                    showConfirmButton: false, timer: prepaidLink ? 2500 : 1500
                 });
             }
         } else {

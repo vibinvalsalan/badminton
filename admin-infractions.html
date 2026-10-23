@@ -89,10 +89,13 @@
         import { state } from './js/state.js';
         import { loadData } from './js/data.js';
         import { formatDateWithDay, formatTime12Hour } from './js/format.js';
+        import { findCreditForSession, linkInfractionToCredit } from './js/prepaid.js';
 
         if (!requireAdmin()) throw new Error('Not authenticated');
 
         let allInfractions = [];
+        // The prepaid credit (if any) the Log Attendance Event form is currently pointing at.
+        let pendingCredit = null;
 
         // Builds {id, label} session options from currently loaded sessions.
         // Shared by the session filter dropdown and the manual-log modal.
@@ -298,6 +301,7 @@
                                 <option value="On Time Payment">⚡ On Time Payment</option>
                             </select>
                         </div>
+                        <div id="swal-inf-prepaid-hint" class="hidden rounded-xl p-2.5 text-[11px] font-bold"></div>
                         <div>
                             <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Reason / Admin Note</label>
                             <textarea id="swal-inf-reason" placeholder="e.g., Cancelled 30 mins before start time without finding sub." class="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 outline-none h-16 text-gray-600 resize-none"></textarea>
@@ -308,6 +312,38 @@
                 showCancelButton: true,
                 confirmButtonText: 'Save Record',
                 confirmButtonColor: '#111827',
+                didOpen: () => {
+                    // For a No Show / Drop Out, show whether this player paid for
+                    // this session from a prepaid bundle; saving links the record
+                    // to that credit (the session stays used).
+                    const hint = document.getElementById('swal-inf-prepaid-hint');
+                    let token = 0; // ignore out-of-date lookups if the admin changes fields quickly
+                    const refresh = async () => {
+                        const mine = ++token;
+                        pendingCredit = null;
+                        const type = document.getElementById('swal-inf-type').value;
+                        if (type !== 'No Show' && type !== 'Drop Out') { hint.classList.add('hidden'); return; }
+                        const credit = await findCreditForSession(
+                            parseInt(document.getElementById('swal-inf-player').value),
+                            document.getElementById('swal-inf-session').value
+                        );
+                        if (mine !== token) return;
+                        if (!credit) { hint.classList.add('hidden'); return; }
+                        hint.classList.remove('hidden');
+                        if (credit.infraction_id) {
+                            hint.className = 'rounded-xl p-2.5 text-[11px] font-bold bg-gray-100 text-gray-600';
+                            hint.textContent = 'This session\'s prepaid credit is already linked to another record.';
+                            return;
+                        }
+                        pendingCredit = credit;
+                        const pay = credit.player_payments;
+                        hint.className = 'rounded-xl p-2.5 text-[11px] font-bold bg-amber-50 text-amber-800';
+                        hint.textContent = `Paid from a prepaid bundle (£${Number(pay.amount).toFixed(2)} for ${pay.sessions_purchased} sessions). Saving links this record to that credit, and the session stays used.`;
+                    };
+                    ['swal-inf-player', 'swal-inf-session', 'swal-inf-type'].forEach(id =>
+                        document.getElementById(id).addEventListener('change', refresh));
+                    refresh();
+                },
                 preConfirm: () => {
                     return {
                         player_id: document.getElementById('swal-inf-player').value,
@@ -321,7 +357,7 @@
             if (!formValues) return;
 
             try {
-                const { error } = await _supabase
+                const { data: created, error } = await _supabase
                     .from('attendance_infractions')
                     .insert([{
                         player_id: parseInt(formValues.player_id),
@@ -329,13 +365,28 @@
                         infraction_type: formValues.infraction_type,
                         reason: formValues.reason || 'Manually logged by Admin.',
                         time_of_reporting: new Date().toISOString()
-                    }]);
+                    }])
+                    .select('id')
+                    .single();
 
                 if (error) throw error;
 
+                // Tie it to the prepaid credit shown in the hint, if there was one.
+                const isAbsence = formValues.infraction_type === 'No Show' || formValues.infraction_type === 'Drop Out';
+                const creditToLink = (isAbsence && created) ? pendingCredit : null;
+                pendingCredit = null;
+                const linked = creditToLink ? await linkInfractionToCredit(creditToLink.id, created.id) : false;
+                const linkFailed = !!creditToLink && !linked;
+
                 Swal.fire({
-                    toast: true, position: 'top', icon: 'success',
-                    title: 'Event logged successfully!', showConfirmButton: false, timer: 1500
+                    toast: true, position: 'top',
+                    icon: linkFailed ? 'warning' : 'success',
+                    title: linked
+                        ? 'Event logged and linked to prepaid session!'
+                        : linkFailed
+                            ? 'Event logged, but could not link it to the prepaid session. Please check Payments.'
+                            : 'Event logged successfully!',
+                    showConfirmButton: false, timer: linkFailed ? 4000 : (linked ? 2200 : 1500)
                 });
 
                 await fetchInfractionsData();

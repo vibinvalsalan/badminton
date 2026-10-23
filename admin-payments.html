@@ -81,7 +81,7 @@
         async function loadAll() {
             const [payRes, playerRes] = await Promise.all([
                 _supabase.from('player_payments')
-                    .select('*, players(name), payment_registrations(id)')
+                    .select('*, players(name), payment_registrations(id, forfeited_at)')
                     .order('paid_on', { ascending: false })
                     .order('created_at', { ascending: false }),
                 _supabase.from('players').select('id, name').order('name')
@@ -98,6 +98,7 @@
                 return {
                     ...p,
                     used,
+                    forfeited: (p.payment_registrations || []).filter(l => l.forfeited_at).length,
                     remaining: p.sessions_purchased - used,
                     status: used >= p.sessions_purchased ? 'Used up' : 'Active',
                     player_name: (p.players && p.players.name) || 'Unknown player'
@@ -144,7 +145,7 @@
                             <span class="text-blue-600">${p.remaining} left</span>
                         </div>
                         <div class="h-2 bg-gray-100 rounded-full overflow-hidden"><div class="h-2 bg-blue-500 rounded-full" style="width:${pct}%"></div></div>
-                        <p class="text-[10px] text-gray-400 mt-1">${perSession} per session</p>
+                        <p class="text-[10px] text-gray-400 mt-1">${perSession} per session${p.forfeited ? ` · <span class="text-red-500 font-bold">${p.forfeited} forfeited (no show / drop out)</span>` : ''}</p>
                     </div>
 
                     ${p.reference ? `<p class="text-[10px] text-gray-500 mt-2"><span class="font-black uppercase text-gray-400">Ref:</span> ${esc(p.reference)}</p>` : ''}
@@ -173,9 +174,11 @@
             box.classList.remove('hidden');
             box.innerHTML = `<p class="text-center text-gray-400 text-[10px] font-bold uppercase py-2">Loading...</p>`;
 
+            // Each row is one used credit. session_id keeps the session known even
+            // after a forfeited credit's registration was removed.
             const { data, error } = await _supabase
                 .from('payment_registrations')
-                .select('registration_id, registrations(player_name, sessions(date, start_time, end_time, location, status))')
+                .select('id, forfeited_at, infraction_id, sessions(date, start_time, end_time, location, status), attendance_infractions(infraction_type, reason)')
                 .eq('payment_id', id);
 
             if (error) {
@@ -183,21 +186,32 @@
                 return;
             }
             const rows = (data || [])
-                .map(r => (r.registrations && r.registrations.sessions) ? r.registrations.sessions : null)
-                .filter(Boolean)
-                .sort((a, b) => (a.date + (a.start_time || '')).localeCompare(b.date + (b.start_time || '')));
+                .map(r => ({ ...r, s: r.sessions || null, inf: r.attendance_infractions || null }))
+                .sort((a, b) => ((a.s ? a.s.date + (a.s.start_time || '') : '~')).localeCompare(b.s ? b.s.date + (b.s.start_time || '') : '~'));
 
             if (rows.length === 0) {
                 box.innerHTML = `<p class="text-center text-gray-400 text-[10px] font-bold uppercase py-2">No sessions linked yet</p>`;
                 return;
             }
-            box.innerHTML = `<div class="space-y-1.5">` + rows.map((s, i) => {
-                const time = (s.start_time && s.end_time) ? `${formatTime12Hour(s.start_time)} - ${formatTime12Hour(s.end_time)}` : '';
+            box.innerHTML = `<div class="space-y-1.5">` + rows.map((r, i) => {
+                const s = r.s;
+                const time = (s && s.start_time && s.end_time) ? `${formatTime12Hour(s.start_time)} - ${formatTime12Hour(s.end_time)}` : '';
+                // Forfeited = the player was removed but the credit stayed used.
+                // A linked No Show / Drop Out without forfeit = still registered.
+                let badge = '';
+                if (r.forfeited_at) {
+                    badge = `<span class="text-[9px] font-black uppercase text-red-600 bg-red-50 px-1.5 py-0.5 rounded">Forfeited${r.inf ? ' · ' + esc(r.inf.infraction_type) : ''}</span>`;
+                } else if (r.inf) {
+                    badge = `<span class="text-[9px] font-black uppercase text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">${esc(r.inf.infraction_type)}</span>`;
+                } else if (s && s.status === 'Cancelled') {
+                    badge = `<span class="text-[9px] font-black uppercase text-red-500">Cancelled</span>`;
+                }
+                const reason = r.inf && r.inf.reason ? `<br><span class="text-[10px] text-gray-400 font-normal italic">${esc(r.inf.reason)}</span>` : '';
                 return `
-                <div class="flex justify-between items-center bg-gray-50 rounded-xl px-3 py-2 text-[11px]">
+                <div class="flex justify-between items-center gap-2 bg-gray-50 rounded-xl px-3 py-2 text-[11px]">
                     <span class="font-black text-gray-400 w-5">${i + 1}.</span>
-                    <span class="flex-1 text-gray-700 font-semibold">${esc(formatDateWithDay(s.date))}<br><span class="text-[10px] text-gray-400 font-normal">${esc(time)}${time && s.location ? ' · ' : ''}${esc(s.location || '')}</span></span>
-                    ${s.status === 'Cancelled' ? `<span class="text-[9px] font-black uppercase text-red-500">Cancelled</span>` : ''}
+                    <span class="flex-1 text-gray-700 font-semibold">${s ? esc(formatDateWithDay(s.date)) : 'Session no longer available'}<br><span class="text-[10px] text-gray-400 font-normal">${esc(time)}${time && s && s.location ? ' · ' : ''}${esc((s && s.location) || '')}</span>${reason}</span>
+                    ${badge}
                 </div>`;
             }).join('') + `</div>`;
         }

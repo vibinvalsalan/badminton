@@ -61,6 +61,7 @@
         import { loadData } from './js/data.js';
         import { formatDateWithDay, formatTime12Hour } from './js/format.js';
         import { logAction } from './js/audit.js';
+        import { loadPrepaidPools, allocatePrepaid, bulkMarkPaid } from './js/prepaid.js';
 
         if (!requireAdmin()) throw new Error('Not authenticated');
 
@@ -298,7 +299,8 @@
                         playerName: p.name,
                         playerId: p.id,
                         sessionId: s.id,
-                        sessionDate: s.date
+                        sessionDate: s.date,
+                        sortKey: `${s.date}|${(s.start_time || '00:00').slice(0, 5)}`
                     });
                 });
             });
@@ -308,28 +310,64 @@
                 return;
             }
 
-            let confirmText = `This will mark ${registrationIdsToUpdate.length} registration(s) as Paid.`;
-            if (alreadyPaidCount > 0) confirmText += ` (${alreadyPaidCount} already paid, will be skipped.)`;
-            if (notRegisteredCount > 0) confirmText += ` (${notRegisteredCount} player/session pair(s) have no registration and will be skipped.)`;
+            let skippedText = '';
+            if (alreadyPaidCount > 0) skippedText += ` (${alreadyPaidCount} already paid, will be skipped.)`;
+            if (notRegisteredCount > 0) skippedText += ` (${notRegisteredCount} player/session pair(s) have no registration and will be skipped.)`;
 
-            const { isConfirmed } = await Swal.fire({
-                title: 'Confirm Bulk Mark Paid',
-                text: confirmText,
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonColor: '#16a34a',
-                confirmButtonText: 'Yes, mark as paid',
-                customClass: { popup: 'rounded-3xl' }
-            });
-            if (!isConfirmed) return;
+            // Prepaid: work out which of these a player's prepaid bundle can
+            // cover (their oldest pay-in first, earliest session first).
+            // Asked once for the whole batch rather than once per row.
+            const pools = await loadPrepaidPools(selectedPlayers.map(p => p.id));
+            const plan = allocatePrepaid(logEntriesPending, pools);
+            const prepaidRows = plan.filter(e => e.paymentId);
 
-            const { error } = await _supabase
-                .from('registrations')
-                .update({ payment_status: 'Paid' })
-                .in('id', registrationIdsToUpdate);
+            const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+            let usePrepaid = false;
 
-            if (error) {
-                Swal.fire('Error', `Bulk update failed: ${error.message}`, 'error');
+            if (prepaidRows.length > 0) {
+                const perPlayer = new Map();
+                prepaidRows.forEach(e => perPlayer.set(e.playerName, (perPlayer.get(e.playerName) || 0) + 1));
+                const lines = [...perPlayer].map(([n, c]) =>
+                    `<li><b>${esc(n)}</b>: ${c} prepaid session${c === 1 ? '' : 's'}</li>`).join('');
+                const normalCount = plan.length - prepaidRows.length;
+
+                const choice = await Swal.fire({
+                    title: 'Confirm Bulk Mark Paid',
+                    html: `
+                        <p>This will mark <b>${plan.length}</b> registration(s) as Paid.${esc(skippedText)}</p>
+                        <p class="mt-3"><b>${prepaidRows.length}</b> can use prepaid sessions:</p>
+                        <ul class="text-left list-disc pl-8 mt-1 text-sm">${lines}</ul>
+                        ${normalCount > 0 ? `<p class="mt-3 text-sm text-gray-500">${normalCount} will be marked paid normally (no prepaid sessions left).</p>` : ''}`,
+                    icon: 'question',
+                    showDenyButton: true,
+                    showCancelButton: true,
+                    confirmButtonColor: '#16a34a',
+                    denyButtonColor: '#6b7280',
+                    cancelButtonColor: '#9ca3af',
+                    confirmButtonText: 'Use prepaid sessions',
+                    denyButtonText: 'Mark all paid normally',
+                    cancelButtonText: 'Cancel',
+                    customClass: { popup: 'rounded-3xl' }
+                });
+                if (choice.isDismissed) return;
+                usePrepaid = choice.isConfirmed;
+            } else {
+                const { isConfirmed } = await Swal.fire({
+                    title: 'Confirm Bulk Mark Paid',
+                    text: `This will mark ${plan.length} registration(s) as Paid.${skippedText}`,
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#16a34a',
+                    confirmButtonText: 'Yes, mark as paid',
+                    customClass: { popup: 'rounded-3xl' }
+                });
+                if (!isConfirmed) return;
+            }
+
+            // Links first, then status; undone again if the status update fails.
+            const result = await bulkMarkPaid(plan, usePrepaid, state.adminName);
+            if (!result.ok) {
+                Swal.fire('Error', result.message, 'error');
                 return;
             }
 
@@ -337,15 +375,19 @@
             // format/action-type as a manual single payment toggle, so this
             // is indistinguishable in the audit log/search from someone
             // marking a player paid individually.
-            for (const entry of logEntriesPending) {
+            for (const entry of plan) {
                 const actionVerb = `${state.adminName} updated ${entry.playerName} as`;
-                const detailMsg = `${actionVerb} Paid for session on ${entry.sessionDate}`;
+                const prepaidNote = (usePrepaid && entry.paymentId)
+                    ? ` using a prepaid session (${entry.sequence} of ${entry.total})`
+                    : '';
+                const detailMsg = `${actionVerb} Paid${prepaidNote} for session on ${entry.sessionDate}`;
                 await logAction('PLAYER_PAID', detailMsg, entry.playerName, entry.sessionId, entry.playerId);
             }
 
             Swal.fire({
                 toast: true, position: 'top', icon: 'success',
-                title: `${registrationIdsToUpdate.length} registration(s) marked Paid!`, showConfirmButton: false, timer: 2000
+                title: `${plan.length} registration(s) marked Paid!` + (result.linked ? ` (${result.linked} from prepaid)` : ''),
+                showConfirmButton: false, timer: 2200
             });
 
             await loadData();

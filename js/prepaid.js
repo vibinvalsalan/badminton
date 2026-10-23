@@ -98,3 +98,98 @@ export async function bulkMarkPaid(plan, usePrepaid, adminName) {
 
     return { ok: true, linked: toLink.length };
 }
+
+// ---------------------------------------------------------------------------
+// Forfeited credits: a player paid ahead, then no-showed or dropped out.
+// The session stays "used" and is tied to the attendance infraction record.
+// Needs migration-link-infractions-to-prepaid.sql.
+// ---------------------------------------------------------------------------
+
+// The prepaid credit a player used for a session, whether or not their
+// registration still exists. Returns the link row (with its pay-in's amount and
+// size) or null if they didn't use prepaid for that session.
+export async function findCreditForSession(playerId, sessionId) {
+    if (!playerId || !sessionId) return null;
+    const { data, error } = await _supabase
+        .from('payment_registrations')
+        .select('id, payment_id, registration_id, infraction_id, forfeited_at, player_payments(player_id, amount, sessions_purchased)')
+        .eq('session_id', sessionId);
+    if (error || !data) return null;
+    return data.find(r => r.player_payments && String(r.player_payments.player_id) === String(playerId)) || null;
+}
+
+// Ties an existing infraction record to a credit (the session stays used).
+export async function linkInfractionToCredit(linkId, infractionId) {
+    const { error } = await _supabase
+        .from('payment_registrations')
+        .update({ infraction_id: infractionId })
+        .eq('id', linkId);
+    return !error;
+}
+
+// A No Show / Drop Out already logged for this player and session, if any, so
+// we attach to it instead of creating a duplicate.
+async function findExistingInfraction(playerId, sessionId) {
+    const { data, error } = await _supabase
+        .from('attendance_infractions')
+        .select('id, infraction_type')
+        .eq('player_id', Number(playerId))
+        .eq('session_id', sessionId)
+        .in('infraction_type', ['No Show', 'Drop Out']);
+    return (!error && data && data[0]) || null;
+}
+
+// Removes a prepaid player from a session but keeps their credit USED:
+//   1. log (or reuse) the infraction,
+//   2. detach the credit from the registration and mark it forfeited,
+//   3. delete the registration (the detached credit is not touched by this).
+// If any step fails, the earlier steps are undone, so nothing is left half-done.
+// `link` is the credit's link row (needs `id`). Returns { ok, ... } or { ok: false, message }.
+export async function forfeitAndRemove({ link, regId, playerId, sessionId, infractionType, reason }) {
+    let infractionId;
+    let created = false;
+
+    const existing = await findExistingInfraction(playerId, sessionId);
+    if (existing) {
+        infractionId = existing.id;
+    } else {
+        const { data, error } = await _supabase
+            .from('attendance_infractions')
+            .insert([{
+                player_id: Number(playerId),
+                session_id: sessionId,
+                infraction_type: infractionType,
+                reason: reason || 'Prepaid session kept as used when removed by admin.',
+                time_of_reporting: new Date().toISOString()
+            }])
+            .select('id')
+            .single();
+        if (error || !data) return { ok: false, message: 'Could not log the infraction, so nothing was changed.' };
+        infractionId = data.id;
+        created = true;
+    }
+    const undoInfraction = async () => {
+        if (created) await _supabase.from('attendance_infractions').delete().eq('id', infractionId);
+    };
+
+    const { error: detachError } = await _supabase
+        .from('payment_registrations')
+        .update({ registration_id: null, forfeited_at: new Date().toISOString(), infraction_id: infractionId })
+        .eq('id', link.id);
+    if (detachError) {
+        await undoInfraction();
+        return { ok: false, message: 'Could not keep the prepaid session as used, so nothing was changed.' };
+    }
+
+    const { error: deleteError } = await _supabase.from('registrations').delete().eq('id', regId);
+    if (deleteError) {
+        await _supabase
+            .from('payment_registrations')
+            .update({ registration_id: regId, forfeited_at: null, infraction_id: null })
+            .eq('id', link.id);
+        await undoInfraction();
+        return { ok: false, message: 'Could not remove the player, so nothing was changed.' };
+    }
+
+    return { ok: true, infractionId, createdInfraction: created };
+}

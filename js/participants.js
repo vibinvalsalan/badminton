@@ -9,6 +9,7 @@ import { _supabase } from './supabase-client.js';
 import { state } from './state.js';
 import { logAction } from './audit.js';
 import { formatTime12Hour, formatDateWithDay } from './format.js';
+import { forfeitAndRemove } from './prepaid.js';
 
 // Players can only remove a name while the session is MORE than this many
 // hours away. Inside the window (or once it has started), only admins can.
@@ -287,10 +288,38 @@ export async function handleRemoval(regId, sid, name, playerId, paymentStatus, o
 
     const isPaid = paymentStatus === 'Paid';
 
+    // Which prepaid credit (if any) covers this registration. Read BEFORE
+    // anything is deleted: deleting the registration removes its link row,
+    // which is what gives the session credit back to the pay-in.
+    const prepaidLink = await getPaymentLink(regId);
+    // Only an admin can keep a credit as used (forfeit it) for a No Show /
+    // Drop Out. A player removing themselves always returns it.
+    const offerForfeit = state.isAdmin && !!prepaidLink;
+
     const result = await Swal.fire({
         title: 'Remove Player?',
         html: `
             Are you sure you want to remove <b>${name}</b>?<br><small class="text-gray-500">This will free up their spot for someone else.</small>
+            ${offerForfeit ? `
+                <div class="mt-4 p-3 bg-amber-50 rounded-xl text-sm text-left space-y-2">
+                    <p class="font-bold text-amber-800">This session was paid from a prepaid bundle</p>
+                    <label class="flex items-start gap-2 cursor-pointer">
+                        <input type="radio" name="prepaid-choice" value="return" checked class="mt-1 accent-blue-600 flex-shrink-0">
+                        <span>Return the prepaid session to their balance</span>
+                    </label>
+                    <label class="flex items-start gap-2 cursor-pointer">
+                        <input type="radio" name="prepaid-choice" value="forfeit" class="mt-1 accent-blue-600 flex-shrink-0">
+                        <span>Keep it as used (forfeited) and log an infraction</span>
+                    </label>
+                    <div id="forfeit-extra" class="hidden pl-6 space-y-2">
+                        <select id="forfeit-type" class="w-full bg-white border border-gray-200 rounded-lg p-2 text-sm font-bold text-gray-700">
+                            <option value="Drop Out">Drop Out</option>
+                            <option value="No Show">No Show</option>
+                        </select>
+                        <input id="forfeit-reason" type="text" placeholder="Reason (optional)" class="w-full bg-white border border-gray-200 rounded-lg p-2 text-sm">
+                    </div>
+                </div>
+            ` : ''}
             ${isPaid ? `
                 <label class="flex items-center gap-2 mt-4 p-3 bg-blue-50 rounded-xl text-sm text-left cursor-pointer">
                     <input type="checkbox" id="reassign-checkbox" checked class="w-4 h-4 accent-blue-600 flex-shrink-0">
@@ -298,6 +327,22 @@ export async function handleRemoval(regId, sid, name, playerId, paymentStatus, o
                 </label>
             ` : ''}
         `,
+        didOpen: () => {
+            if (!offerForfeit) return;
+            // Keeping the credit as used and moving them to another session
+            // contradict each other, so choosing "keep" switches the move off.
+            const radios = document.querySelectorAll('input[name="prepaid-choice"]');
+            const sync = () => {
+                const forfeit = document.querySelector('input[name="prepaid-choice"]:checked').value === 'forfeit';
+                document.getElementById('forfeit-extra').classList.toggle('hidden', !forfeit);
+                const cb = document.getElementById('reassign-checkbox');
+                if (cb) {
+                    if (forfeit) cb.checked = false;
+                    cb.disabled = forfeit;
+                }
+            };
+            radios.forEach(r => r.addEventListener('change', sync));
+        },
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#ef4444',
@@ -312,7 +357,14 @@ export async function handleRemoval(regId, sid, name, playerId, paymentStatus, o
         },
         preConfirm: () => {
             const cb = document.getElementById('reassign-checkbox');
-            return { reassign: isPaid && !!cb && cb.checked };
+            const choice = offerForfeit ? document.querySelector('input[name="prepaid-choice"]:checked') : null;
+            const forfeit = !!choice && choice.value === 'forfeit';
+            return {
+                reassign: isPaid && !forfeit && !!cb && cb.checked,
+                forfeit,
+                infractionType: forfeit ? document.getElementById('forfeit-type').value : null,
+                reason: forfeit ? document.getElementById('forfeit-reason').value.trim() : ''
+            };
         }
     });
 
@@ -332,10 +384,35 @@ export async function handleRemoval(regId, sid, name, playerId, paymentStatus, o
             ? `${performer} removed ${name} from session on ${session.date} (${displayTime})`
             : `${performer} removed ${name} from session ID: ${sid}`;
 
-        // Read the prepaid link BEFORE deleting: deleting the registration
-        // removes its link row automatically, which is what gives the session
-        // credit back to the pay-in.
-        const prepaidLink = await getPaymentLink(regId);
+        const wantsForfeit = !!(offerForfeit && result.value && result.value.forfeit);
+
+        // Keep-as-used: log the infraction, detach the credit, then remove the
+        // registration (all undone if any step fails). Otherwise a plain
+        // delete, which also returns the credit via the database cascade.
+        if (wantsForfeit) {
+            const forfeit = await forfeitAndRemove({
+                link: prepaidLink,
+                regId,
+                playerId,
+                sessionId: sid,
+                infractionType: result.value.infractionType,
+                reason: result.value.reason || `Removed by ${state.adminName}; prepaid session kept as used.`
+            });
+            if (!forfeit.ok) {
+                Swal.fire('Error', forfeit.message, 'error');
+                return;
+            }
+            await logAction('PLAYER_REMOVED',
+                `${logDetails} (prepaid session kept as used, ${result.value.infractionType} logged)`,
+                name, sid);
+            if (onComplete) await onComplete();
+            Swal.fire({
+                toast: true, position: 'top', icon: 'success',
+                title: `Removed. Prepaid session kept as used and ${result.value.infractionType} logged`,
+                showConfirmButton: false, timer: 3000
+            });
+            return;
+        }
 
         const { error } = await _supabase.from('registrations').delete().eq('id', regId);
 

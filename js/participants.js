@@ -286,7 +286,27 @@ export async function handleRemoval(regId, sid, name, playerId, paymentStatus, o
         return;
     }
 
-    const isPaid = paymentStatus === 'Paid';
+    // Paid players can't remove themselves. Previously a paid self-removal
+    // offered an automatic transfer to the next session (hidden ones
+    // included), which players used to jump into hidden sessions. Status is
+    // also read from the loaded registration, not just the value passed in
+    // from the button, so it can't be sidestepped by editing the markup.
+    const registration = targetSession
+        ? [...(targetSession.players || []), ...(targetSession.waitlist || [])].find(p => p.id == regId)
+        : null;
+    const isPaid = paymentStatus === 'Paid' || (!!registration && registration.payment_status === 'Paid');
+
+    if (isPaid && !state.isAdmin) {
+        await Swal.fire({
+            icon: 'info',
+            title: 'Payment already made',
+            text: "You can't remove yourself while marked as paid. Mark yourself as unpaid first, or contact an admin to adjust your payment.",
+            confirmButtonText: 'OK',
+            confirmButtonColor: '#2563eb',
+            customClass: { popup: 'rounded-3xl', confirmButton: 'rounded-xl px-6 py-3 text-sm font-bold uppercase' }
+        });
+        return;
+    }
 
     // Which prepaid credit (if any) covers this registration. Read BEFORE
     // anything is deleted: deleting the registration removes its link row,
@@ -320,7 +340,7 @@ export async function handleRemoval(regId, sid, name, playerId, paymentStatus, o
                     </div>
                 </div>
             ` : ''}
-            ${isPaid ? `
+            ${isPaid && state.isAdmin ? `
                 <label class="flex items-center gap-2 mt-4 p-3 bg-blue-50 rounded-xl text-sm text-left cursor-pointer">
                     <input type="checkbox" id="reassign-checkbox" checked class="w-4 h-4 accent-blue-600 flex-shrink-0">
                     <span>They've already paid -- move them to the next available session</span>
@@ -360,7 +380,7 @@ export async function handleRemoval(regId, sid, name, playerId, paymentStatus, o
             const choice = offerForfeit ? document.querySelector('input[name="prepaid-choice"]:checked') : null;
             const forfeit = !!choice && choice.value === 'forfeit';
             return {
-                reassign: isPaid && !forfeit && !!cb && cb.checked,
+                reassign: isPaid && state.isAdmin && !forfeit && !!cb && cb.checked,
                 forfeit,
                 infractionType: forfeit ? document.getElementById('forfeit-type').value : null,
                 reason: forfeit ? document.getElementById('forfeit-reason').value.trim() : ''

@@ -60,6 +60,7 @@
         import { state } from './js/state.js';
         import { loadData } from './js/data.js';
         import { logAction } from './js/audit.js';
+        import { esc } from './js/utils.js';
 
         if (!requireAdmin()) throw new Error('Not authenticated');
 
@@ -75,19 +76,27 @@
         function renderMasterPlayerList() {
             document.getElementById('master-player-list').innerHTML = state.masterPlayers.map(p => `
                 <div class="bg-white p-4 rounded-2xl border border-gray-100 flex justify-between items-center shadow-sm mb-2">
-                    <span class="font-bold text-gray-700">${p.name}</span>
+                    <span class="font-bold text-gray-700">${esc(p.name)}</span>
                     <div class="flex gap-2">
-                        <a href="admin-player-detail.html?player=${p.id}" class="text-xs bg-blue-50 text-blue-600 px-3 py-1 rounded-lg font-bold uppercase">View Profile</a>
-                        <button class="edit-player-btn text-xs bg-gray-50 text-gray-600 px-3 py-1 rounded-lg font-bold uppercase" data-id="${p.id}" data-name="${p.name}">Edit</button>
-                        <button class="delete-player-btn text-red-300 px-2" data-id="${p.id}" data-name="${p.name}">×</button>
+                        <a href="admin-player-detail.html?player=${encodeURIComponent(p.id)}" class="text-xs bg-blue-50 text-blue-600 px-3 py-1 rounded-lg font-bold uppercase">View Profile</a>
+                        <button class="edit-player-btn text-xs bg-gray-50 text-gray-600 px-3 py-1 rounded-lg font-bold uppercase" data-id="${esc(p.id)}">Edit</button>
+                        <button class="delete-player-btn text-red-300 px-2" data-id="${esc(p.id)}">×</button>
                     </div>
                 </div>`).join('') || '<p class="text-center text-gray-400 italic">No players added yet.</p>';
 
-            document.querySelectorAll('.edit-player-btn').forEach(btn =>
-                btn.addEventListener('click', () => editPlayerForm(btn.dataset.id, btn.dataset.name)));
-            document.querySelectorAll('.delete-player-btn').forEach(btn =>
-                btn.addEventListener('click', () => deleteMasterPlayer(btn.dataset.id, btn.dataset.name)));
         }
+
+        // Delegated and bound once. Names come from state, not from HTML attributes.
+        document.getElementById('master-player-list').addEventListener('click', e => {
+            const editBtn = e.target.closest('.edit-player-btn');
+            const delBtn = e.target.closest('.delete-player-btn');
+            const btn = editBtn || delBtn;
+            if (!btn) return;
+            const player = state.masterPlayers.find(p => String(p.id) === btn.dataset.id);
+            if (!player) return;
+            if (editBtn) editPlayerForm(player.id, player.name);
+            else deleteMasterPlayer(player.id, player.name);
+        });
 
         function editPlayerForm(id, name) {
             managerView.classList.add('hidden');
@@ -127,16 +136,19 @@
             container.innerHTML = notes.map(n => `
                 <div class="bg-gray-50 p-3 rounded-xl border border-gray-100 text-xs">
                     <div class="flex justify-between items-start gap-2 mb-1">
-                        <span class="text-gray-700 flex-1">${n.note_text}</span>
-                        <button class="delete-note-btn text-gray-300 hover:text-red-500 flex-shrink-0" data-id="${n.id}">×</button>
+                        <span class="text-gray-700 flex-1">${esc(n.note_text)}</span>
+                        <button class="delete-note-btn text-gray-300 hover:text-red-500 flex-shrink-0" data-id="${esc(n.id)}">×</button>
                     </div>
-                    <p class="text-[9px] font-bold text-gray-400 uppercase">${n.created_by || 'Admin'} · ${new Date(n.created_at).toLocaleDateString()} ${new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                    <p class="text-[9px] font-bold text-gray-400 uppercase">${esc(n.created_by || 'Admin')} · ${new Date(n.created_at).toLocaleDateString()} ${new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                 </div>
             `).join('');
 
-            document.querySelectorAll('.delete-note-btn').forEach(btn =>
-                btn.addEventListener('click', () => deletePlayerNote(btn.dataset.id)));
         }
+
+        document.getElementById('player-notes-list').addEventListener('click', e => {
+            const btn = e.target.closest('.delete-note-btn');
+            if (btn) deletePlayerNote(btn.dataset.id);
+        });
 
         async function addPlayerNote() {
             const playerId = document.getElementById('edit-player-id').value;
@@ -170,7 +182,11 @@
             if (!isConfirmed) return;
 
             const playerId = document.getElementById('edit-player-id').value;
-            await _supabase.from('player_notes').delete().eq('id', noteId);
+            const { error } = await _supabase.from('player_notes').delete().eq('id', noteId);
+            if (error) {
+                Swal.fire('Error', 'Could not delete that note.', 'error');
+                return;
+            }
             await loadPlayerNotes(playerId);
         }
 
@@ -178,7 +194,11 @@
             const nameInput = document.getElementById('new-player-name');
             const name = nameInput.value.trim();
             if (!name) return;
-            await _supabase.from('players').insert([{ name }]);
+            const { error } = await _supabase.from('players').insert([{ name }]);
+            if (error) {
+                Swal.fire('Error', 'Could not add that player. Please try again.', 'error');
+                return;
+            }
             nameInput.value = '';
             await logAction('ADMIN_PLAYER_CREATED', `${state.adminName} created player ${name}`);
             await loadData();
@@ -189,18 +209,37 @@
             const id = document.getElementById('edit-player-id').value;
             const newName = document.getElementById('edit-player-name').value.trim();
             if (!newName) return;
-            await _supabase.from('players').update({ name: newName }).eq('id', id);
-            await _supabase.from('registrations').update({ player_name: newName }).eq('player_id', id);
-            await logAction('ADMIN_PLAYER_UPDATED', `${state.adminName} changed name to ${newName}`);
+            const { error: playerError } = await _supabase.from('players').update({ name: newName }).eq('id', id);
+            if (playerError) {
+                Swal.fire('Error', 'Could not rename that player. Nothing was changed.', 'error');
+                return;
+            }
+            const { error: regError } = await _supabase.from('registrations').update({ player_name: newName }).eq('player_id', id);
+            if (regError) {
+                Swal.fire('Partly saved', 'The player was renamed, but their existing session entries still show the old name.', 'warning');
+            }
+            await logAction('ADMIN_PLAYER_UPDATED', `${state.adminName} changed name to ${newName}`, newName, null, id);
             await loadData();
             showPlayerManager();
         }
 
         async function deleteMasterPlayer(id, name) {
-            const { isConfirmed } = await Swal.fire({ title: 'Remove?', text: name, icon: 'warning', showCancelButton: true });
+            const { isConfirmed } = await Swal.fire({
+                title: 'Delete this player?',
+                text: `${name} will be removed from the player list. This cannot be undone.`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                confirmButtonText: 'Yes, delete'
+            });
             if (isConfirmed) {
-                await _supabase.from('players').delete().eq('id', id);
-                await logAction('ADMIN_PLAYER_DELETED', `${state.adminName} deleted ${name}`);
+                const { error } = await _supabase.from('players').delete().eq('id', id);
+                if (error) {
+                    // Typically the player still has registrations, payments or history.
+                    Swal.fire('Could not delete', 'This player could not be deleted. They may still be linked to sessions, payments or history.', 'error');
+                    return;
+                }
+                await logAction('ADMIN_PLAYER_DELETED', `${state.adminName} deleted ${name}`, name, null, id);
                 await loadData();
                 renderMasterPlayerList();
             }

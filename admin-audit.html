@@ -55,6 +55,7 @@
     <script type="module">
         import { requireAdmin } from './js/auth-guard.js';
         import { _supabase } from './js/supabase-client.js';
+        import { esc } from './js/utils.js';
 
         if (!requireAdmin()) throw new Error('Not authenticated');
 
@@ -63,7 +64,7 @@
         function populateActionDropdown() {
             const distinctActions = Array.from(new Set(allLogs.map(l => l.action))).sort();
             const select = document.getElementById('audit-action-select');
-            const optionsHtml = distinctActions.map(a => `<option value="${a}">${a.replace(/_/g, ' ')}</option>`).join('');
+            const optionsHtml = distinctActions.map(a => `<option value="${esc(a)}">${esc(a.replace(/_/g, ' '))}</option>`).join('');
             select.innerHTML = `<option value="ALL">All Actions</option>${optionsHtml}`;
         }
 
@@ -95,11 +96,11 @@
             document.getElementById('list-audit').innerHTML = filtered.map(log => `
                 <div class="bg-white p-3 rounded-xl border border-gray-50 text-xs mb-2 shadow-sm">
                     <div class="flex justify-between mb-1">
-                        <span class="font-black text-blue-600 uppercase">${log.action.replace(/_/g, ' ')}</span>
+                        <span class="font-black text-blue-600 uppercase">${esc(log.action.replace(/_/g, ' '))}</span>
                         <span class="text-gray-300">${new Date(log.created_at).toLocaleDateString()} ${new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
-                    <p class="text-gray-600">${log.details}</p>
-                    ${log.player_name ? `<p class="text-[10px] font-bold text-gray-400 mt-1">Player: ${log.player_name}</p>` : ''}
+                    <p class="text-gray-600">${esc(log.details)}</p>
+                    ${log.player_name ? `<p class="text-[10px] font-bold text-gray-400 mt-1">Player: ${esc(log.player_name)}</p>` : ''}
                 </div>`).join('') || '<p class="text-center text-gray-400 italic py-8">No logs match those filters</p>';
         }
 

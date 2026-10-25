@@ -36,6 +36,7 @@
         import { state } from './js/state.js';
         import { formatDateWithDay, formatTime12Hour } from './js/format.js';
         import { logVisit } from './js/audit.js';
+        import { esc, todayStr } from './js/utils.js';
 
         function renderSessions() {
             const list = document.getElementById('session-list');
@@ -72,7 +73,7 @@
                     : 'N/A';
 
                 const card = document.createElement('a');
-                card.href = `session.html?session=${s.short_id}`;
+                card.href = `session.html?session=${encodeURIComponent(s.short_id)}`;
                 card.className = "block bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex items-center gap-4 cursor-pointer hover:shadow-md transition-all active:scale-[0.98] mb-3";
 
                 card.innerHTML = `
@@ -90,10 +91,10 @@
                         </div>
                         <div class="flex items-center gap-1.5 mb-1">
                             <svg class="w-3 h-3 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path></svg>
-                            <p class="text-xs text-gray-400 truncate">${s.location}</p>
+                            <p class="text-xs text-gray-400 truncate">${esc(s.location)}</p>
                         </div>
                         <div class="flex items-center gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-tight">
-                            <span>FEE: <span class="${s.fee.toLowerCase() === 'tbc' ? 'text-yellow-600' : 'text-blue-600'}">${s.fee}</span></span>
+                            <span>FEE: <span class="${String(s.fee || '').toLowerCase() === 'tbc' ? 'text-yellow-600' : 'text-blue-600'}">${esc(s.fee)}</span></span>
                             <span class="text-gray-200">•</span>
                             <span>PLAYERS: <span class="text-gray-600">${s.players.length}/${s.capacity}</span></span>
                             <span class="text-gray-200">•</span>
@@ -112,8 +113,10 @@
         }
 
         (async () => {
-            await logVisit();
-            await loadData();
+            // Visit log runs in the background, and only upcoming sessions are
+            // downloaded (the page never shows past ones).
+            logVisit();
+            await loadData({ fromDate: todayStr() });
             renderSessions();
         })();
     </script>

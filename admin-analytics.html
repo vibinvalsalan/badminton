@@ -64,6 +64,7 @@
     <script type="module">
         import { requireAdmin } from './js/auth-guard.js';
         import { _supabase } from './js/supabase-client.js';
+        import { esc, todayStr, daysAgoStr } from './js/utils.js';
 
         if (!requireAdmin()) throw new Error('Not authenticated');
 
@@ -156,7 +157,7 @@
                 return `
                     <div>
                         <div class="flex justify-between text-[11px] font-bold text-gray-600 mb-1">
-                            <span>${device}</span>
+                            <span>${esc(device)}</span>
                             <span>${count} (${pct}%)</span>
                         </div>
                         <div class="w-full bg-gray-100 rounded-full h-2">
@@ -188,12 +189,9 @@
         document.getElementById('an-to-date').addEventListener('change', computeAndRender);
 
         (async () => {
-            // Default range: last 30 days
-            const today = new Date();
-            const thirtyDaysAgo = new Date();
-            thirtyDaysAgo.setDate(today.getDate() - 30);
-            document.getElementById('an-from-date').value = thirtyDaysAgo.toISOString().split('T')[0];
-            document.getElementById('an-to-date').value = today.toISOString().split('T')[0];
+            // Default range: last 30 days (local dates; toISOString() is UTC and a day behind in BST)
+            document.getElementById('an-from-date').value = daysAgoStr(30);
+            document.getElementById('an-to-date').value = todayStr();
 
             await fetchVisits();
         })();

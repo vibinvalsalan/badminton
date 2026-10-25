@@ -78,6 +78,7 @@
         import { loadData } from './js/data.js';
         import { formatDateWithDay, formatTime12Hour } from './js/format.js';
         import { logVisit, logAction } from './js/audit.js';
+        import { esc, todayStr } from './js/utils.js';
 
         // --- Player search combobox ---
         function setupCombobox() {
@@ -95,26 +96,29 @@
                     suggestionsBox.innerHTML = `<p class="text-xs text-gray-400 italic px-4 py-3">No matching players</p>`;
                 } else {
                     suggestionsBox.innerHTML = matches.map(p => `
-                        <button type="button" data-id="${p.id}" data-name="${p.name}"
+                        <button type="button" data-id="${esc(p.id)}"
                             class="suggestion-item w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 transition-colors font-medium">
-                            ${p.name}
+                            ${esc(p.name)}
                         </button>
                     `).join('');
                 }
                 suggestionsBox.classList.remove('hidden');
-
-                suggestionsBox.querySelectorAll('.suggestion-item').forEach(btn => {
-                    btn.addEventListener('click', () => {
-                        hiddenId.value = btn.dataset.id;
-                        searchInput.value = btn.dataset.name;
-                        suggestionsBox.classList.add('hidden');
-                        // Log each name selection so admin can see which
-                        // players are being looked up and how frequently.
-                        logAction('PLAYER_PROFILE_VIEWED', `Player sessions viewed for: ${btn.dataset.name}`, btn.dataset.name, null, btn.dataset.id);
-                        loadPlayerSessions(btn.dataset.id, btn.dataset.name);
-                    });
-                });
             }
+
+            // One delegated listener instead of re-binding every suggestion on each keystroke.
+            suggestionsBox.addEventListener('click', e => {
+                const btn = e.target.closest('.suggestion-item');
+                if (!btn) return;
+                const player = state.masterPlayers.find(p => String(p.id) === btn.dataset.id);
+                if (!player) return;
+                hiddenId.value = player.id;
+                searchInput.value = player.name;
+                suggestionsBox.classList.add('hidden');
+                // Log each name selection so admin can see which
+                // players are being looked up and how frequently.
+                logAction('PLAYER_PROFILE_VIEWED', `Player sessions viewed for: ${player.name}`, player.name, null, player.id);
+                loadPlayerSessions(player.id, player.name);
+            });
 
             searchInput.addEventListener('focus', () => renderSuggestions(searchInput.value));
             searchInput.addEventListener('input', () => {
@@ -134,7 +138,7 @@
             document.getElementById('player-results').classList.add('hidden');
             document.getElementById('loading-state').classList.remove('hidden');
 
-            const today = new Date().toISOString().split('T')[0];
+            const today = todayStr(); // local date; toISOString() is UTC and a day behind in BST
 
             const [{ data: upcoming, error: upcomingError }, { data: history, error: historyError }] = await Promise.all([
                 // Upcoming: raw registrations joined to sessions.
@@ -174,7 +178,7 @@
             renderUpcoming(upcomingRows);
             renderPast(pastRows);
 
-            document.getElementById('player-greeting').innerText = `Hi, ${playerName}!`;
+            document.getElementById('player-greeting').innerText = `Hi, ${playerName}!`; // innerText, so no escaping needed
             document.getElementById('player-results').classList.remove('hidden');
         }
 
@@ -212,7 +216,7 @@
                                 <div>
                                     <p class="text-[10px] font-black text-gray-400 uppercase">${formatDateWithDay(s.date)}</p>
                                     <p class="font-black text-gray-400 text-lg leading-tight">${displayTime}</p>
-                                    <p class="text-xs text-gray-400 font-medium mt-0.5">${s.location}</p>
+                                    <p class="text-xs text-gray-400 font-medium mt-0.5">${esc(s.location)}</p>
                                 </div>
                                 <div class="flex flex-col items-end gap-1">
                                     ${regBadge}${cancelledTag}
@@ -227,17 +231,17 @@
 
                 // Visible sessions: fully clickable card.
                 return `
-                    <a href="session.html?session=${s.short_id}"
+                    <a href="session.html?session=${encodeURIComponent(s.short_id)}"
                         class="block bg-white p-4 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md active:scale-[0.98] transition-all">
                         <div class="flex justify-between items-start mb-2">
                             <div>
                                 <p class="text-[10px] font-black text-blue-600 uppercase">${formatDateWithDay(s.date)}</p>
                                 <p class="font-black text-gray-900 text-lg leading-tight">${displayTime}</p>
-                                <p class="text-xs text-gray-400 font-medium mt-0.5">${s.location}</p>
+                                <p class="text-xs text-gray-400 font-medium mt-0.5">${esc(s.location)}</p>
                             </div>
                             <div class="flex flex-col items-end gap-1">
                                 ${regBadge}${cancelledTag}
-                                <span class="text-xs font-bold text-blue-600 mt-1">${s.fee || ''}</span>
+                                <span class="text-xs font-bold text-blue-600 mt-1">${esc(s.fee || '')}</span>
                             </div>
                         </div>
                         <p class="text-[10px] text-gray-300 font-bold uppercase mt-1">Tap to view session →</p>
@@ -261,9 +265,9 @@
                 <div class="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex justify-between items-center">
                     <div>
                         <p class="text-[10px] font-black text-gray-400 uppercase">${formatDateWithDay(h.session_date)}</p>
-                        <p class="font-bold text-gray-800 text-sm mt-0.5">${h.session_time}</p>
+                        <p class="font-bold text-gray-800 text-sm mt-0.5">${esc(h.session_time)}</p>
                     </div>
-                    <span class="text-[9px] font-bold text-gray-400 uppercase text-right max-w-[120px] truncate">${h.session_location}</span>
+                    <span class="text-[9px] font-bold text-gray-400 uppercase text-right max-w-[120px] truncate">${esc(h.session_location)}</span>
                 </div>`).join('');
         }
 
@@ -277,8 +281,8 @@
 
         // --- Init ---
         (async () => {
-            await logVisit();
-            await loadData();
+            logVisit(); // background; nothing here depends on it
+            await loadData({ fromDate: todayStr() }); // this page only needs the player list, so skip the full session history
             setupCombobox();
         })();
     </script>

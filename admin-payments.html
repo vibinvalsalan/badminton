@@ -59,15 +59,14 @@
         import { state } from './js/state.js';
         import { logAction } from './js/audit.js';
         import { formatDateWithDay, formatTime12Hour } from './js/format.js';
+        import { esc, todayStr } from './js/utils.js';
 
         if (!requireAdmin()) throw new Error('Not authenticated');
 
         // Free-text fields (reference, notes, names) go into innerHTML, so escape them.
-        const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
         const money = n => '£' + Number(n).toFixed(2);
         const fmtDate = d => { if (!d) return ''; const [y, m, dd] = d.split('-'); return `${dd}/${m}/${y}`; };
         // Local calendar date (toISOString would give yesterday for the first hour of BST days).
-        const todayLocal = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
         const listEl = document.getElementById('payments-list');
         const countEl = document.getElementById('count-label');
@@ -256,7 +255,7 @@
                         ${isEdit && used > 0 ? `<p class="text-[10px] text-gray-400 -mt-1 ml-1">${used} session${used === 1 ? '' : 's'} already used, so it can't go below ${used}.</p>` : ''}
                         <div class="grid grid-cols-2 gap-3">
                             <div><label class="${labelCls}">Date paid</label>
-                                <input id="pf-date" type="date" class="${inputCls}" value="${isEdit ? existing.paid_on : todayLocal()}"></div>
+                                <input id="pf-date" type="date" class="${inputCls}" value="${isEdit ? existing.paid_on : todayStr()}"></div>
                             <div><label class="${labelCls}">Method</label>
                                 <select id="pf-method" class="${inputCls}">${methodOpts}</select></div>
                         </div>

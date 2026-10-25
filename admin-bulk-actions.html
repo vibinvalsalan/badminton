@@ -60,7 +60,8 @@
         import { state } from './js/state.js';
         import { loadData } from './js/data.js';
         import { formatDateWithDay, formatTime12Hour } from './js/format.js';
-        import { logAction } from './js/audit.js';
+        import { logActions } from './js/audit.js';
+        import { esc } from './js/utils.js';
         import { loadPrepaidPools, allocatePrepaid, bulkMarkPaid } from './js/prepaid.js';
 
         if (!requireAdmin()) throw new Error('Not authenticated');
@@ -79,13 +80,11 @@
 
             container.innerHTML = matches.map(p => `
                 <label class="flex items-center gap-2 px-2 py-2 rounded-xl hover:bg-gray-50 cursor-pointer">
-                    <input type="checkbox" class="player-checkbox w-4 h-4 accent-blue-600" value="${p.id}" data-name="${p.name}">
-                    <span class="text-sm font-medium text-gray-700">${p.name}</span>
+                    <input type="checkbox" class="player-checkbox w-4 h-4 accent-blue-600" value="${esc(p.id)}">
+                    <span class="text-sm font-medium text-gray-700">${esc(p.name)}</span>
                 </label>
             `).join('');
 
-            container.querySelectorAll('.player-checkbox').forEach(cb =>
-                cb.addEventListener('change', updateSelectedCounts));
         }
 
         function renderSessionChecklist() {
@@ -101,18 +100,22 @@
                 const timeTag = (s.start_time && s.end_time) ? `${formatTime12Hour(s.start_time)} - ${formatTime12Hour(s.end_time)}` : 'N/A';
                 return `
                     <label class="flex items-center gap-2 px-2 py-2 rounded-xl hover:bg-gray-50 cursor-pointer">
-                        <input type="checkbox" class="session-checkbox w-4 h-4 accent-blue-600" value="${s.id}">
+                        <input type="checkbox" class="session-checkbox w-4 h-4 accent-blue-600" value="${esc(s.id)}">
                         <div class="flex-1 min-w-0">
-                            <span class="text-sm font-bold text-gray-700">${formatDateWithDay(s.date)}</span>
-                            <span class="text-xs text-gray-400 ml-1">${timeTag} · ${s.location} · ${s.players.length}/${s.capacity}</span>
+                            <span class="text-sm font-bold text-gray-700">${esc(formatDateWithDay(s.date))}</span>
+                            <span class="text-xs text-gray-400 ml-1">${esc(timeTag)} · ${esc(s.location)} · ${s.players.length}/${s.capacity}</span>
                         </div>
                     </label>
                 `;
             }).join('');
 
-            container.querySelectorAll('.session-checkbox').forEach(cb =>
-                cb.addEventListener('change', updateSelectedCounts));
         }
+
+        // One delegated change listener for both checklists (attached once), instead of
+        // re-binding every checkbox each time a list is redrawn or filtered.
+        document.addEventListener('change', e => {
+            if (e.target.matches('.player-checkbox, .session-checkbox')) updateSelectedCounts();
+        });
 
         function getSelectedPlayerIds() {
             return Array.from(document.querySelectorAll('.player-checkbox:checked')).map(cb => cb.value);
@@ -187,6 +190,7 @@
                     });
                     logEntriesPending.push({
                         playerName: p.name,
+                        playerId: p.id,
                         sessionId: s.id,
                         sessionDate: s.date,
                         displayTime,
@@ -198,11 +202,11 @@
             if (capacityErrors.length > 0 || duplicateErrors.length > 0) {
                 let errorHtml = '<div class="text-left text-xs space-y-2">';
                 capacityErrors.forEach(e => {
-                    errorHtml += `<p>❌ <strong>${formatDateWithDay(e.session.date)}</strong> would have ${e.wouldBe} players, but capacity is ${e.capacity}.</p>`;
+                    errorHtml += `<p>❌ <strong>${esc(formatDateWithDay(e.session.date))}</strong> would have ${e.wouldBe} players, but capacity is ${e.capacity}.</p>`;
                 });
                 duplicateErrors.forEach(e => {
-                    const names = e.players.map(p => p.name).join(', ');
-                    errorHtml += `<p>❌ <strong>${formatDateWithDay(e.session.date)}</strong>: already registered — ${names}.</p>`;
+                    const names = e.players.map(p => esc(p.name)).join(', ');
+                    errorHtml += `<p>❌ <strong>${esc(formatDateWithDay(e.session.date))}</strong>: already registered — ${names}.</p>`;
                 });
                 errorHtml += '</div>';
 
@@ -244,11 +248,14 @@
             // indistinguishable in the audit log/search from someone
             // joining individually — same as handleRemoval/handlePayment
             // already do for their own actions.
-            for (const entry of logEntriesPending) {
-                const actionVerb = `${state.adminName} added ${entry.playerName} to`;
-                const logMessage = `${actionVerb} session on ${entry.sessionDate} (${entry.displayTime}), Status: ${entry.status}`;
-                await logAction('PLAYER_JOINED_SESSION', logMessage, entry.playerName, entry.sessionId);
-            }
+            // Sent as ONE request (was one request per player per session).
+            await logActions(logEntriesPending.map(entry => ({
+                action: 'PLAYER_JOINED_SESSION',
+                details: `${state.adminName} added ${entry.playerName} to session on ${entry.sessionDate} (${entry.displayTime}), Status: ${entry.status}`,
+                playerName: entry.playerName,
+                sessionId: entry.sessionId,
+                playerId: entry.playerId
+            })));
 
             Swal.fire({
                 toast: true, position: 'top', icon: 'success',
@@ -321,7 +328,6 @@
             const plan = allocatePrepaid(logEntriesPending, pools);
             const prepaidRows = plan.filter(e => e.paymentId);
 
-            const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
             let usePrepaid = false;
 
             if (prepaidRows.length > 0) {
@@ -375,14 +381,18 @@
             // format/action-type as a manual single payment toggle, so this
             // is indistinguishable in the audit log/search from someone
             // marking a player paid individually.
-            for (const entry of plan) {
-                const actionVerb = `${state.adminName} updated ${entry.playerName} as`;
+            await logActions(plan.map(entry => {
                 const prepaidNote = (usePrepaid && entry.paymentId)
                     ? ` using a prepaid session (${entry.sequence} of ${entry.total})`
                     : '';
-                const detailMsg = `${actionVerb} Paid${prepaidNote} for session on ${entry.sessionDate}`;
-                await logAction('PLAYER_PAID', detailMsg, entry.playerName, entry.sessionId, entry.playerId);
-            }
+                return {
+                    action: 'PLAYER_PAID',
+                    details: `${state.adminName} updated ${entry.playerName} as Paid${prepaidNote} for session on ${entry.sessionDate}`,
+                    playerName: entry.playerName,
+                    sessionId: entry.sessionId,
+                    playerId: entry.playerId
+                };
+            }));
 
             Swal.fire({
                 toast: true, position: 'top', icon: 'success',

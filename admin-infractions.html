@@ -90,6 +90,8 @@
         import { loadData } from './js/data.js';
         import { formatDateWithDay, formatTime12Hour } from './js/format.js';
         import { findCreditForSession, linkInfractionToCredit } from './js/prepaid.js';
+        import { esc, daysAgoStr, lastDayOfMonthStr } from './js/utils.js';
+        import { logAction } from './js/audit.js';
 
         if (!requireAdmin()) throw new Error('Not authenticated');
 
@@ -100,16 +102,21 @@
         // Builds {id, label} session options from currently loaded sessions.
         // Shared by the session filter dropdown and the manual-log modal.
         function getSessionOptions() {
-            return (state.allData || []).map(s => {
-                const timeTag = (s.start_time && s.end_time) ? ` (${formatTime12Hour(s.start_time)})` : '';
-                return { id: String(s.id), label: `${s.date}${timeTag} - ${s.location || 'TBA'}` };
-            }).sort((a, b) => new Date(b.date) - new Date(a.date));
+            // Sort the sessions (newest first) BEFORE mapping to options. The old
+            // code sorted the {id, label} objects by a `date` they don't have,
+            // so the dropdown was never actually ordered.
+            return [...(state.allData || [])]
+                .sort((a, b) => `${b.date}|${b.start_time || ''}`.localeCompare(`${a.date}|${a.start_time || ''}`))
+                .map(s => {
+                    const timeTag = (s.start_time && s.end_time) ? ` (${formatTime12Hour(s.start_time)})` : '';
+                    return { id: String(s.id), label: `${s.date}${timeTag} - ${s.location || 'TBA'}` };
+                });
         }
 
         function populateSessionFilterDropdown() {
             const select = document.getElementById('inf-session-select');
             const sessionOpts = getSessionOptions();
-            const optionsHtml = sessionOpts.map(s => `<option value="${s.id}">${s.label}</option>`).join('');
+            const optionsHtml = sessionOpts.map(s => `<option value="${esc(s.id)}">${esc(s.label)}</option>`).join('');
             select.innerHTML = `<option value="ALL">All Sessions</option>${optionsHtml}`;
         }
 
@@ -201,19 +208,19 @@
                         <div class="flex justify-between items-center">
                             <div class="flex items-center gap-1.5">
                                 <span class="text-sm">${icon}</span>
-                                <span class="font-black text-gray-900 text-sm leading-none">${record.player_name || 'Unknown Player'}</span>
+                                <span class="font-black text-gray-900 text-sm leading-none">${esc(record.player_name || 'Unknown Player')}</span>
                             </div>
                             <span class="text-[9px] font-black border uppercase px-2 py-0.5 rounded-md ${badgeStyle}">
-                                ${record.infraction_type}
+                                ${esc(record.infraction_type)}
                             </span>
-                            <button class="delete-infraction-btn text-gray-400 hover:text-red-500 text-sm p-1 transition-colors" data-id="${record.id}" title="Delete Record">
+                            <button class="delete-infraction-btn text-gray-400 hover:text-red-500 text-sm p-1 transition-colors" data-id="${esc(record.id)}" title="Delete Record">
                                 🗑️
                             </button>
                         </div>
 
                         <div class="bg-gray-50/60 p-2 rounded-xl border border-gray-50 text-[11px] text-gray-600">
-                            <p><strong>Session:</strong> ${formattedDate}${timeDisplayString}</p>
-                            <p class="mt-1 text-gray-500 italic">"${record.reason || 'No additional details provided.'}"</p>
+                            <p><strong>Session:</strong> ${esc(formattedDate)}${esc(timeDisplayString)}</p>
+                            <p class="mt-1 text-gray-500 italic">"${esc(record.reason || 'No additional details provided.')}"</p>
                         </div>
 
                         <div class="text-[9px] text-gray-300 font-bold uppercase tracking-wider text-right">
@@ -223,9 +230,13 @@
                 `;
             }).join('');
 
-            document.querySelectorAll('.delete-infraction-btn').forEach(btn =>
-                btn.addEventListener('click', () => deleteInfractionRecord(btn.dataset.id)));
         }
+
+        // Delegated: one listener for all delete buttons, attached once.
+        document.getElementById('list-infractions').addEventListener('click', e => {
+            const btn = e.target.closest('.delete-infraction-btn');
+            if (btn) deleteInfractionRecord(btn.dataset.id);
+        });
 
         async function deleteInfractionRecord(id) {
             if (!id) return;
@@ -250,6 +261,8 @@
                     .eq('id', id);
 
                 if (error) throw error;
+                // Deleting a manually-logged record leaves no trace otherwise.
+                await logAction('INFRACTION_DELETED', `${state.adminName || 'Admin'} deleted attendance record ${id}`, null, null);
 
                 Swal.fire({
                     toast: true, position: 'top', icon: 'success',
@@ -277,8 +290,8 @@
                 return;
             }
 
-            const playerSelectHtml = playerOpts.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-            const sessionSelectHtml = sessionOpts.map(s => `<option value="${s.id}">${s.label}</option>`).join('');
+            const playerSelectHtml = playerOpts.map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+            const sessionSelectHtml = sessionOpts.map(s => `<option value="${esc(s.id)}">${esc(s.label)}</option>`).join('');
 
             const { value: formValues } = await Swal.fire({
                 title: '✏️ LOG ATTENDANCE EVENT',
@@ -410,21 +423,14 @@
             // Date range intentionally reset to the same default 30-day
             // window used on page load, rather than cleared to empty,
             // since an unbounded date range isn't the expected "reset" state.
-            const today = new Date();
-            const thirtyDaysAgo = new Date();
-            thirtyDaysAgo.setDate(today.getDate() - 30);
-            document.getElementById('inf-from-date').value = thirtyDaysAgo.toISOString().split('T')[0];
-            document.getElementById('inf-to-date').value = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0];
+            document.getElementById('inf-from-date').value = daysAgoStr(30);
+            document.getElementById('inf-to-date').value = lastDayOfMonthStr();
             filterInfractions();
         });
 
         (async () => {
-            const today = new Date();
-            const thirtyDaysAgo = new Date();
-            thirtyDaysAgo.setDate(today.getDate() - 30);
-
-            document.getElementById('inf-from-date').value = thirtyDaysAgo.toISOString().split('T')[0];
-            document.getElementById('inf-to-date').value = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0];
+            document.getElementById('inf-from-date').value = daysAgoStr(30);
+            document.getElementById('inf-to-date').value = lastDayOfMonthStr();
 
             await loadData(); // needed so openManualInfractionModal can list sessions
             populateSessionFilterDropdown();

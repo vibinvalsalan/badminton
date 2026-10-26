@@ -68,6 +68,7 @@
         import { requireAdmin } from './js/auth-guard.js';
         import { _supabase } from './js/supabase-client.js';
         import { formatDateWithDay } from './js/format.js';
+        import { esc } from './js/utils.js';
 
         if (!requireAdmin()) throw new Error('Not authenticated');
 
@@ -137,7 +138,7 @@
 
             const rowsHtml = lastRenderedRows.map(s => `
                 <tr>
-                    <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${s.player_name}</td>
+                    <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${esc(s.player_name)}</td>
                     <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${s.games_played}</td>
                 </tr>
             `).join('');
@@ -145,7 +146,7 @@
             document.getElementById('print-only-area').innerHTML = `
                 <div style="font-family: sans-serif; padding: 20px;">
                     <h1 style="font-size:18px;margin-bottom:4px;">Player Participation Report</h1>
-                    <p style="font-size:11px;color:#666;margin-bottom:16px;">${rangeLabel} &middot; Generated ${new Date().toLocaleString()}</p>
+                    <p style="font-size:11px;color:#666;margin-bottom:16px;">${esc(rangeLabel)} &middot; Generated ${new Date().toLocaleString()}</p>
                     <table style="width:100%;border-collapse:collapse;font-size:13px;">
                         <thead>
                             <tr>
@@ -238,9 +239,9 @@
 
             statsList.innerHTML = rows.map(s => `
                 <div class="stats-row flex items-center justify-between p-5 border-b border-gray-50 hover:bg-blue-50 transition-all cursor-pointer group"
-                    data-player-id="${s.player_id}" data-player-name="${s.player_name}">
+                    data-player-id="${esc(s.player_id)}">
                     <div class="flex flex-col">
-                        <span class="font-bold text-gray-800 group-hover:text-blue-600">${s.player_name}</span>
+                        <span class="font-bold text-gray-800 group-hover:text-blue-600">${esc(s.player_name)}</span>
                         <span class="text-[9px] text-gray-400 uppercase font-black tracking-widest">Click for history</span>
                     </div>
                     <div class="flex items-center bg-blue-50 px-4 py-2 rounded-2xl border border-blue-100 group-hover:bg-blue-600 group-hover:border-blue-600 transition-colors">
@@ -250,11 +251,13 @@
                 </div>
             `).join('');
 
-            document.querySelectorAll('.stats-row').forEach(row =>
-                row.addEventListener('click', () => {
-                    window.location.href = `admin-player-detail.html?player=${row.dataset.playerId}`;
-                }));
         }
+
+        // Delegated and bound once (was re-bound on every filter change).
+        document.getElementById('stats-list').addEventListener('click', e => {
+            const row = e.target.closest('.stats-row');
+            if (row) window.location.href = `admin-player-detail.html?player=${encodeURIComponent(row.dataset.playerId)}`;
+        });
 
         document.getElementById('stats-from-date').addEventListener('change', renderPlayerStats);
         document.getElementById('stats-to-date').addEventListener('change', renderPlayerStats);

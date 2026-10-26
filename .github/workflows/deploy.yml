@@ -25,26 +25,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Inject Build Number
-        run: |
-          # This replaces the placeholder with the actual GitHub run number
-          # in every HTML file in the repo, not just index.html
-          find . -name "*.html" -type f -exec \
-            sed -i "s/#BUILD_NUMBER#/${{ github.run_number }}/g" {} +
-
-      - name: Inject Secrets
-        run: |
-          sed -i "s|VITE_SUPABASE_URL|${{ secrets.SUPABASE_URL }}|g" index.html
-          sed -i "s|VITE_SUPABASE_KEY|${{ secrets.SUPABASE_KEY }}|g" index.html
-
-      - name: Replace placeholders with real secrets
+      - name: Inject build number and Supabase settings
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: |
-          # Replace tokens in every HTML file in the repo
-          find . -name "*.html" -o -name "*.js" -type f -exec \
-            sed -i "s|VITE_SUPABASE_URL|${SUPABASE_URL}|g; s|VITE_SUPABASE_KEY|${SUPABASE_KEY}|g; s|#BUILD_NUMBER#|${{ github.run_number }}|g" {} +    
+          # Replace the placeholders in every HTML and JS file in the repo.
+          # The parentheses matter: without them `-type f -exec` only applied
+          # to the .js half of the match and the .html half was silently skipped
+          # (build numbers only worked because of a separate earlier step).
+          find . \( -name "*.html" -o -name "*.js" \) -type f -not -path "./.git/*" -exec \
+            sed -i "s|VITE_SUPABASE_URL|${SUPABASE_URL}|g; s|VITE_SUPABASE_KEY|${SUPABASE_KEY}|g; s|#BUILD_NUMBER#|${{ github.run_number }}|g" {} +
 
       - name: Setup Pages
         uses: actions/configure-pages@v4

@@ -42,6 +42,7 @@
         <div id="admin-past-list" class="hidden space-y-4">
             <h2 class="text-xl font-black mb-4">Past Sessions</h2>
             <div id="list-past" class="space-y-3"></div>
+            <button id="past-more-btn" class="hidden w-full bg-gray-100 text-gray-600 font-black text-[10px] uppercase py-3 rounded-xl">Show more</button>
         </div>
 
         <div id="admin-hidden-list" class="hidden space-y-4">
@@ -172,7 +173,8 @@
         import { state, VENUES } from './js/state.js';
         import { loadData } from './js/data.js';
         import { formatDateWithDay, formatTime12Hour } from './js/format.js';
-        import { logAction } from './js/audit.js';
+        import { logAction, logActions } from './js/audit.js';
+        import { esc } from './js/utils.js';
 
         if (!requireAdmin()) {
             // requireAdmin() already redirected; stop here.
@@ -210,56 +212,82 @@
         tabPastBtn.addEventListener('click', () => { closeEditor(); closeDuplicator(); setTab('past'); });
         tabHiddenBtn.addEventListener('click', () => { closeEditor(); closeDuplicator(); setTab('hidden'); });
 
-        function renderAdminLists() {
-            const activeContainer = document.getElementById('list-active');
-            const pastContainer = document.getElementById('list-past');
-            const hiddenContainer = document.getElementById('list-hidden');
-            const today = new Date().setHours(0, 0, 0, 0);
+        const PAST_PAGE = 15;
+        let pastShown = PAST_PAGE;
 
-            activeContainer.innerHTML = '';
-            pastContainer.innerHTML = '';
-            hiddenContainer.innerHTML = '';
-
-            state.allData.sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(s => {
-                const isPast = new Date(s.date).setHours(0, 0, 0, 0) < today;
-                // Past sessions always go to Past regardless of visibility
-                // (unchanged behavior). Among future sessions, ones marked
-                // Private (is_visible === false) move to the new Hidden tab
-                // instead of Active.
-                const isHiddenFuture = !isPast && s.is_visible === false;
-                const target = isPast ? pastContainer : (isHiddenFuture ? hiddenContainer : activeContainer);
-
-                const detailTime = (s.start_time && s.end_time)
-                    ? `${formatTime12Hour(s.start_time)} - ${formatTime12Hour(s.end_time)}`
-                    : 'N/A';
-                const paidCount = s.players.filter(p => p.payment_status === 'Paid').length;
-                const item = document.createElement('div');
-                item.className = "bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex justify-between items-center mb-2";
-                item.innerHTML = `
+        function sessionCardHtml(s, isPast) {
+            const detailTime = (s.start_time && s.end_time)
+                ? `${formatTime12Hour(s.start_time)} - ${formatTime12Hour(s.end_time)}`
+                : 'N/A';
+            const paidCount = s.players.filter(p => p.payment_status === 'Paid').length;
+            return `
+                <div class="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex justify-between items-center mb-2">
                     <div>
-                        <p class="text-xs font-bold ${isPast ? 'text-gray-400' : 'text-blue-600'}">${formatDateWithDay(s.date)}</p>
+                        <p class="text-xs font-bold ${isPast ? 'text-gray-400' : 'text-blue-600'}">${esc(formatDateWithDay(s.date))}</p>
                         <h4 class="font-black text-gray-800">
-                            ${detailTime}
+                            ${esc(detailTime)}
                             ${s.is_visible === false ? '<span class="ml-2 text-[8px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full uppercase tracking-wider font-black">Hidden</span>' : ''}
                         </h4>
-                        <p class="text-[10px] text-gray-400 font-bold uppercase">${s.location} • Fee: ${s.fee} • Paid: ${paidCount}/${s.players.length}</p>
+                        <p class="text-[10px] text-gray-400 font-bold uppercase">${esc(s.location)} • Fee: ${esc(s.fee)} • Paid: ${paidCount}/${s.players.length}</p>
                     </div>
                     <div class="flex gap-2">
-                        <a href="session.html?session=${s.short_id}" class="bg-blue-50 text-blue-700 font-bold text-[10px] px-3 py-2 rounded-xl">View</a>
-                        <button class="edit-session-btn bg-gray-50 text-gray-600 font-bold text-[10px] px-3 py-2 rounded-xl" data-id="${s.id}">Edit</button>
-                        <button class="dup-session-btn bg-purple-50 text-purple-700 font-bold text-[10px] px-3 py-2 rounded-xl" data-id="${s.id}">Dup</button>
-                        <button class="delete-session-btn text-red-300 px-2" data-id="${s.id}">×</button>
-                    </div>`;
-                target.appendChild(item);
+                        <a href="session.html?session=${encodeURIComponent(s.short_id)}" class="bg-blue-50 text-blue-700 font-bold text-[10px] px-3 py-2 rounded-xl">View</a>
+                        <button class="edit-session-btn bg-gray-50 text-gray-600 font-bold text-[10px] px-3 py-2 rounded-xl" data-id="${esc(s.id)}">Edit</button>
+                        <button class="dup-session-btn bg-purple-50 text-purple-700 font-bold text-[10px] px-3 py-2 rounded-xl" data-id="${esc(s.id)}">Dup</button>
+                        <button class="delete-session-btn text-red-300 px-2" data-id="${esc(s.id)}">×</button>
+                    </div>
+                </div>`;
+        }
+
+        function renderAdminLists() {
+            const today = new Date().setHours(0, 0, 0, 0);
+
+            // Sort a COPY. The old code sorted state.allData in place, which
+            // silently reordered the list every other function reads from.
+            const sorted = [...state.allData].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            const active = [], past = [], hidden = [];
+            sorted.forEach(s => {
+                const isPast = new Date(s.date).setHours(0, 0, 0, 0) < today;
+                // Past sessions always go to Past regardless of visibility. Among
+                // future sessions, Private ones (is_visible === false) go to Hidden.
+                if (isPast) past.push(s);
+                else if (s.is_visible === false) hidden.push(s);
+                else active.push(s);
             });
 
-            document.querySelectorAll('.edit-session-btn').forEach(btn =>
-                btn.addEventListener('click', () => showSessionForm(btn.dataset.id)));
-            document.querySelectorAll('.dup-session-btn').forEach(btn =>
-                btn.addEventListener('click', () => showDuplicator(btn.dataset.id)));
-            document.querySelectorAll('.delete-session-btn').forEach(btn =>
-                btn.addEventListener('click', () => deleteSession(btn.dataset.id)));
+            // One innerHTML write per list instead of creating and appending
+            // an element per session.
+            document.getElementById('list-active').innerHTML = active.map(s => sessionCardHtml(s, false)).join('')
+                || '<p class="text-center text-gray-400 italic text-xs py-6">No active sessions.</p>';
+            document.getElementById('list-hidden').innerHTML = hidden.map(s => sessionCardHtml(s, false)).join('')
+                || '<p class="text-center text-gray-400 italic text-xs py-6">No hidden sessions.</p>';
+
+            const shownPast = past.slice(0, pastShown);
+            document.getElementById('list-past').innerHTML = shownPast.map(s => sessionCardHtml(s, true)).join('')
+                || '<p class="text-center text-gray-400 italic text-xs py-6">No past sessions.</p>';
+
+            const moreBtn = document.getElementById('past-more-btn');
+            const remaining = past.length - shownPast.length;
+            moreBtn.classList.toggle('hidden', remaining <= 0);
+            moreBtn.innerText = `Show ${Math.min(PAST_PAGE, remaining)} more (${remaining} left)`;
         }
+
+        // One delegated click handler for all session buttons (attached once),
+        // instead of re-binding every button after each render.
+        document.addEventListener('click', e => {
+            const edit = e.target.closest('.edit-session-btn');
+            if (edit) return showSessionForm(edit.dataset.id);
+            const dup = e.target.closest('.dup-session-btn');
+            if (dup) return showDuplicator(dup.dataset.id);
+            const del = e.target.closest('.delete-session-btn');
+            if (del) return deleteSession(del.dataset.id);
+        });
+
+        document.getElementById('past-more-btn').addEventListener('click', () => {
+            pastShown += PAST_PAGE;
+            renderAdminLists();
+        });
 
         function setupVenueDropdown() {
             const select = document.getElementById('f-loc-select');
@@ -267,7 +295,7 @@
             VENUES.forEach(v => {
                 let opt = document.createElement('option');
                 opt.value = v.id;
-                opt.innerHTML = v.name;
+                opt.textContent = v.name;
                 select.appendChild(opt);
             });
         }
@@ -349,15 +377,37 @@
 
             const startTimeVal = document.getElementById('f-start-time').value;
             const endTimeVal = document.getElementById('f-end-time').value;
+
+            // Validate before anything is written. An empty capacity used to be
+            // saved as NaN, and nothing stopped an end time before the start.
+            const dateVal = document.getElementById('f-date').value;
+            const capacityVal = parseInt(document.getElementById('f-cap').value, 10);
+            const feeVal = document.getElementById('f-fee').value.trim();
+            const problems = [];
+            if (!dateVal) problems.push('Choose a date.');
+            if (!Number.isInteger(capacityVal) || capacityVal < 1) problems.push('Capacity must be a whole number of 1 or more.');
+            if (!feeVal) problems.push('Enter a fee (use TBC if it is not known yet).');
+            if (startTimeVal && endTimeVal && endTimeVal <= startTimeVal) problems.push('The end time must be after the start time.');
+            if (sessionId) {
+                const existing = state.allData.find(x => x.id === sessionId);
+                if (existing && capacityVal < existing.players.length) {
+                    problems.push(`Capacity cannot be below the ${existing.players.length} players already confirmed.`);
+                }
+            }
+            if (problems.length) {
+                Swal.fire({ icon: 'warning', title: 'Please check the form', html: problems.map(p => `<p>${esc(p)}</p>`).join(''), confirmButtonColor: '#2563eb' });
+                return;
+            }
+
             const isVisibleValue = document.getElementById('f-visible').value === "true";
 
             const sData = {
-                date: document.getElementById('f-date').value,
+                date: dateVal,
                 start_time: startTimeVal,
                 end_time: endTimeVal,
                 location: finalLocation,
-                capacity: parseInt(document.getElementById('f-cap').value),
-                fee: document.getElementById('f-fee').value,
+                capacity: capacityVal,
+                fee: feeVal,
                 admin_notes: document.getElementById('f-notes').value,
                 is_visible: isVisibleValue,
                 payment_method: document.getElementById('f-payment-method').value,
@@ -466,10 +516,10 @@
                 : 'N/A';
 
             document.getElementById('dup-source-summary').innerHTML = `
-                <p class="font-black text-gray-700">Copying from: ${formatDateWithDay(s.date)}</p>
-                <p class="text-gray-500">Time: ${displayTime}</p>
-                <p class="text-gray-500">Location: ${s.location}</p>
-                <p class="text-gray-500">Capacity: ${s.capacity} · Fee: ${s.fee}</p>
+                <p class="font-black text-gray-700">Copying from: ${esc(formatDateWithDay(s.date))}</p>
+                <p class="text-gray-500">Time: ${esc(displayTime)}</p>
+                <p class="text-gray-500">Location: ${esc(s.location)}</p>
+                <p class="text-gray-500">Capacity: ${esc(s.capacity)} · Fee: ${esc(s.fee)}</p>
                 <p class="text-[9px] text-gray-400 mt-1 uppercase font-bold">New sessions will be created as Hidden (Private) and start with no players registered.</p>
             `;
 
@@ -558,15 +608,14 @@
 
             // Log one audit entry per created session, consistent with
             // SESSION_CREATED entries from the manual editor flow.
+            // One request for all the audit entries instead of one per session.
             const currentAdmin = state.adminName || 'Admin';
-            for (const newSession of (created || [])) {
-                await logAction(
-                    'SESSION_CREATED',
-                    `${currentAdmin} duplicated session from ${source.date} to ${newSession.date}`,
-                    currentAdmin,
-                    newSession.id
-                );
-            }
+            await logActions((created || []).map(newSession => ({
+                action: 'SESSION_CREATED',
+                details: `${currentAdmin} duplicated session from ${source.date} to ${newSession.date}`,
+                playerName: currentAdmin,
+                sessionId: newSession.id
+            })));
 
             Swal.fire({
                 toast: true, position: 'top', icon: 'success',

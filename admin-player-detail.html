@@ -195,6 +195,7 @@
         import { requireAdmin } from './js/auth-guard.js';
         import { _supabase } from './js/supabase-client.js';
         import { formatDateWithDay, formatTime12Hour } from './js/format.js';
+        import { esc, todayStr } from './js/utils.js';
 
         if (!requireAdmin()) throw new Error('Not authenticated');
 
@@ -203,11 +204,9 @@
         // ---------------------------------------------------------------
         // Names, reasons, notes and audit details are free text and are put
         // into innerHTML, so they are always escaped.
-        const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
         const money = n => '£' + Number(n || 0).toFixed(2);
         const fmtDate = d => { if (!d) return ''; const [y, m, dd] = String(d).split('T')[0].split('-'); return `${dd}/${m}/${y}`; };
         const fmtDateTime = d => new Date(d).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-        const todayLocal = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
         const timeRange = (s, e) => (s && e) ? `${formatTime12Hour(s)} - ${formatTime12Hour(e)}` : 'N/A';
         const sessionSortKey = s => s ? `${s.date || ''}|${(s.start_time || '').slice(0, 5)}` : '~';
 
@@ -909,7 +908,7 @@
             const playerId = new URLSearchParams(window.location.search).get('player');
             if (!playerId) { showError(); return; }
 
-            const today = todayLocal();
+            const today = todayStr();
 
             const [
                 { data: player, error: playerError },

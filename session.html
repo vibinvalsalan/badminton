@@ -36,9 +36,9 @@
         import { state } from './js/state.js';
         import { loadData } from './js/data.js';
         import { formatDateWithDay, formatTime12Hour } from './js/format.js';
-        import { logVisit } from './js/audit.js';
-        import { toggleSessionLogs } from './js/audit.js';
-        import { renderPlayerRow, handlePayment, handleRemoval, promoteFromWaitlist, joinSession, toggleJoinButton, validateAndJoin, filterPlayers, canRemove, showRemovalLocked, LOCKED_REMOVAL_MESSAGE } from './js/participants.js';
+        import { logVisit, toggleSessionLogs } from './js/audit.js';
+        import { esc } from './js/utils.js';
+        import { renderPlayerRow, handlePayment, handleRemovalById, promoteFromWaitlistById, joinSession, toggleJoinButton, validateAndJoin, filterPlayers, canRemove, showRemovalLocked, LOCKED_REMOVAL_MESSAGE } from './js/participants.js';
         import { copyToWhatsApp } from './js/whatsapp.js';
 
         // Expose functions needed by inline onclick handlers in rendered HTML.
@@ -46,8 +46,11 @@
         // function referenced by onclick="fn()" in innerHTML must be explicitly
         // attached to window.
         window.handlePayment    = (id, status)          => handlePayment(id, status, refresh);
-        window.handleRemoval    = (id, sid, name, playerId, paymentStatus) => handleRemoval(id, sid, name, playerId, paymentStatus, refresh);
-        window.promoteFromWaitlist = (id, sid, name)     => promoteFromWaitlist(id, sid, name, refresh);
+        // Only ids travel through the inline handlers. Names and payment status
+        // are looked up from loaded data, so an apostrophe in a name (O'Brien)
+        // can't break the button.
+        window.handleRemoval    = (id, sid)              => handleRemovalById(id, sid, refresh);
+        window.promoteFromWaitlist = (id, sid)           => promoteFromWaitlistById(id, sid, refresh);
         window.showRemovalLocked = showRemovalLocked;
         window.toggleJoinButton = toggleJoinButton;
         window.validateAndJoin  = ()                     => validateAndJoin(refresh);
@@ -101,7 +104,7 @@
             const isFeeTBC = !s.fee || s.fee.toLowerCase() === 'tbc';
             const feeDisplay = isFeeTBC
                 ? `<span class="bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase">Pending</span>`
-                : `<span class="text-blue-600 font-bold">${s.fee}</span>`;
+                : `<span class="text-blue-600 font-bold">${esc(s.fee)}</span>`;
 
             document.getElementById('session-detail-content').innerHTML = `
                 <div class="bg-white rounded-3xl shadow-xl p-6 card-border-top animate-fadeIn">
@@ -111,7 +114,7 @@
                             <p class="text-lg text-gray-600 font-medium">${detailTime}</p>
                             <div class="flex items-center gap-1 pt-1">
                                 <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                                <a href="#" class="text-blue-600 hover:underline text-sm font-medium">Venue: ${s.location}</a>
+                                <a href="#" class="text-blue-600 hover:underline text-sm font-medium">Venue: ${esc(s.location)}</a>
                             </div>
                         </div>
                         <div class="flex gap-2">
@@ -133,14 +136,14 @@
                     ${state.isAdmin && s.admin_notes ? `
                     <div class="mt-4 p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded-r-xl mb-6">
                         <p class="text-[10px] font-black text-yellow-700 uppercase mb-1">Admin Internal Note:</p>
-                        <p class="text-sm text-yellow-900 italic">"${s.admin_notes}"</p>
+                        <p class="text-sm text-yellow-900 italic">"${esc(s.admin_notes)}"</p>
                     </div>
                     ` : ''}
 
                     ${s.special_instruction ? `
                     <div class="mb-6 p-3 bg-orange-50 border border-orange-100 rounded-2xl flex gap-3 items-center">
                         <span class="text-xl">⚠️</span>
-                        <p class="text-xs text-orange-800 font-medium">${s.special_instruction}</p>
+                        <p class="text-xs text-orange-800 font-medium">${esc(s.special_instruction)}</p>
                     </div>
                     ` : ''}
 
@@ -188,21 +191,21 @@
                         <p class="text-[10px] font-black text-gray-400 uppercase pt-6 mb-3">Waitlist</p>
                         ${s.waitlist.map(p => `
                             <div class="flex justify-between items-center p-3 bg-gray-50 rounded-xl mb-2">
-                                <span class="text-gray-500 text-sm italic">${p.player_name}</span>
+                                <span class="text-gray-500 text-sm italic">${esc(p.player_name)}</span>
                                 <div class="flex items-center gap-2">
                                     ${state.isAdmin ? `
-                                        <button onclick="promoteFromWaitlist('${p.id}', '${s.id}', '${p.player_name}')"
+                                        <button onclick="promoteFromWaitlist('${esc(p.id)}', '${esc(s.id)}')"
                                             class="text-[9px] px-2 py-1.5 rounded-lg font-black bg-blue-100 text-blue-700 uppercase hover:bg-blue-200 transition-colors">
                                             Promote
                                         </button>
                                     ` : ''}
                                     ${canRemove(s) ? `
-                                    <button onclick="handleRemoval('${p.id}', '${s.id}', '${p.player_name}', '${p.player_id}', '${p.payment_status}')"
+                                    <button onclick="handleRemoval('${esc(p.id)}', '${esc(s.id)}')"
                                         class="text-red-200 hover:text-red-400 transition-colors pl-2 border-l border-gray-200">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                                     </button>
                                     ` : `
-                                    <button onclick="showRemovalLocked()" title="${LOCKED_REMOVAL_MESSAGE}" aria-label="Removal locked" class="text-gray-300 hover:text-gray-500 transition-colors pl-2 border-l border-gray-200">
+                                    <button onclick="showRemovalLocked()" title="${esc(LOCKED_REMOVAL_MESSAGE)}" aria-label="Removal locked" class="text-gray-300 hover:text-gray-500 transition-colors pl-2 border-l border-gray-200">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"></path></svg>
                                     </button>
                                     `}
@@ -235,6 +238,8 @@
         // which toggleJoinButton()/joinSession() already read from). Called
         // every time renderDetailPage() runs, since innerHTML replacement
         // wipes out any previously attached listeners.
+        let outsideClickAttached = false;
+
         function setupPlayerSearchCombobox() {
             const searchInput = document.getElementById('join-player-search');
             const suggestionsBox = document.getElementById('join-player-suggestions');
@@ -251,23 +256,27 @@
                     suggestionsBox.innerHTML = `<p class="text-xs text-gray-400 italic px-4 py-3">No matching players</p>`;
                 } else {
                     suggestionsBox.innerHTML = matches.map(p => `
-                        <button type="button" data-id="${p.id}" data-name="${p.name}"
+                        <button type="button" data-id="${esc(p.id)}"
                             class="player-suggestion-item w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 transition-colors">
-                            ${p.name}
+                            ${esc(p.name)}
                         </button>
                     `).join('');
                 }
                 suggestionsBox.classList.remove('hidden');
-
-                suggestionsBox.querySelectorAll('.player-suggestion-item').forEach(btn => {
-                    btn.addEventListener('click', () => {
-                        hiddenIdInput.value = btn.dataset.id;
-                        searchInput.value = btn.dataset.name;
-                        suggestionsBox.classList.add('hidden');
-                        toggleJoinButton();
-                    });
-                });
             }
+
+            // One delegated listener instead of one per suggestion, re-created
+            // on every keystroke.
+            suggestionsBox.addEventListener('click', e => {
+                const btn = e.target.closest('.player-suggestion-item');
+                if (!btn) return;
+                const player = state.masterPlayers.find(p => String(p.id) === btn.dataset.id);
+                if (!player) return;
+                hiddenIdInput.value = player.id;
+                searchInput.value = player.name;
+                suggestionsBox.classList.add('hidden');
+                toggleJoinButton();
+            });
 
             searchInput.addEventListener('focus', () => renderSuggestions(searchInput.value));
             searchInput.addEventListener('input', () => {
@@ -278,17 +287,26 @@
                 renderSuggestions(searchInput.value);
             });
 
-            // Hide suggestions when clicking outside the combobox.
-            document.addEventListener('click', (e) => {
-                if (!searchInput.contains(e.target) && !suggestionsBox.contains(e.target)) {
-                    suggestionsBox.classList.add('hidden');
-                }
-            });
+            // Hide suggestions when clicking outside the combobox. This used to add
+            // a new document-level listener every time the page re-rendered
+            // (after each join/pay/remove); now it is attached once and always
+            // looks up the current elements.
+            if (!outsideClickAttached) {
+                outsideClickAttached = true;
+                document.addEventListener('click', (e) => {
+                    const input = document.getElementById('join-player-search');
+                    const box = document.getElementById('join-player-suggestions');
+                    if (input && box && !input.contains(e.target) && !box.contains(e.target)) {
+                        box.classList.add('hidden');
+                    }
+                });
+            }
         }
 
         // --- init ---
         (async () => {
-            await logVisit();
+            // The visit log is fire-and-forget; no reason to make the page wait for it.
+            logVisit();
             await loadData();
 
             const shortId = new URLSearchParams(window.location.search).get('session');

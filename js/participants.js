@@ -10,6 +10,7 @@ import { state } from './state.js';
 import { logAction } from './audit.js';
 import { formatTime12Hour, formatDateWithDay } from './format.js';
 import { forfeitAndRemove } from './prepaid.js';
+import { esc } from './utils.js';
 
 // Players can only remove a name while the session is MORE than this many
 // hours away. Inside the window (or once it has started), only admins can.
@@ -47,9 +48,37 @@ export function showRemovalLocked() {
     });
 }
 
+// Inline onclick handlers only carry ids. Names go through the DOM as text and
+// are looked up here, so a name containing an apostrophe (O'Brien) can no
+// longer break the button, and nothing the user can edit in the page is
+// trusted for payment status.
+export function findRegistration(sid, regId) {
+    const session = state.allData.find(x => x.id === sid);
+    if (!session) return null;
+    return [...(session.players || []), ...(session.waitlist || [])].find(r => String(r.id) === String(regId)) || null;
+}
+
+export function handleRemovalById(regId, sid, onComplete) {
+    const reg = findRegistration(sid, regId);
+    if (!reg) {
+        Swal.fire('Error', 'That player is no longer on the list. Please refresh and try again.', 'error');
+        return;
+    }
+    return handleRemoval(regId, sid, reg.player_name, reg.player_id, reg.payment_status, onComplete);
+}
+
+export function promoteFromWaitlistById(regId, sid, onComplete) {
+    const reg = findRegistration(sid, regId);
+    if (!reg) {
+        Swal.fire('Error', 'That player is no longer on the waitlist. Please refresh and try again.', 'error');
+        return;
+    }
+    return promoteFromWaitlist(regId, sid, reg.player_name, onComplete);
+}
+
 export function renderPlayerRow(p, s) {
     const removeControl = canRemove(s)
-        ? `<button onclick="handleRemoval('${p.id}', '${s.id}', '${p.player_name}', '${p.player_id}', '${p.payment_status}')"
+        ? `<button onclick="handleRemoval('${esc(p.id)}', '${esc(s.id)}')"
                     class="text-gray-300 hover:text-red-500 transition-all p-2 ml-2 rounded-full hover:bg-red-50">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -62,16 +91,16 @@ export function renderPlayerRow(p, s) {
                 </button>`;
     return `
         <div class="group flex justify-between items-center p-3 rounded-xl hover:bg-gray-50 transition-colors border border-transparent">
-            <span class="font-semibold text-gray-700">${p.player_name}</span>
+            <span class="font-semibold text-gray-700">${esc(p.player_name)}</span>
             <div class="flex items-center gap-4">
                 ${p.payment_status === 'Paid' ? `
-                    <button onclick="handlePayment('${p.id}', '${p.payment_status}')"
+                    <button onclick="handlePayment('${esc(p.id)}', '${esc(p.payment_status)}')"
                         class="flex items-center gap-1 text-[10px] px-3 py-1.5 rounded-lg font-black bg-green-100 text-green-700 border border-green-200 uppercase">
                         <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
                         Paid
                     </button>
                 ` : `
-                    <button onclick="handlePayment('${p.id}', '${p.payment_status}')"
+                    <button onclick="handlePayment('${esc(p.id)}', '${esc(p.payment_status)}')"
                         class="text-[10px] px-3 py-1.5 rounded-lg font-black bg-blue-600 text-white shadow-sm uppercase tracking-tighter">
                         Mark Paid
                     </button>
@@ -128,7 +157,7 @@ export async function handlePayment(id, currentStatus, onComplete) {
         if (credit) {
             const choice = await Swal.fire({
                 title: 'Use a prepaid session?',
-                html: `<b>${reg.player_name}</b> has <b>${credit.remaining}</b> prepaid session${credit.remaining === 1 ? '' : 's'} left
+                html: `<b>${esc(reg.player_name)}</b> has <b>${credit.remaining}</b> prepaid session${credit.remaining === 1 ? '' : 's'} left
                        <br><small class="text-gray-500">£${Number(credit.payment.amount).toFixed(2)} for ${credit.payment.sessions_purchased} sessions, paid ${credit.payment.paid_on.split('-').reverse().join('/')}. This would be session ${credit.used + 1} of ${credit.payment.sessions_purchased}.</small>`,
                 icon: 'question',
                 showDenyButton: true,
@@ -319,7 +348,7 @@ export async function handleRemoval(regId, sid, name, playerId, paymentStatus, o
     const result = await Swal.fire({
         title: 'Remove Player?',
         html: `
-            Are you sure you want to remove <b>${name}</b>?<br><small class="text-gray-500">This will free up their spot for someone else.</small>
+            Are you sure you want to remove <b>${esc(name)}</b>?<br><small class="text-gray-500">This will free up their spot for someone else.</small>
             ${offerForfeit ? `
                 <div class="mt-4 p-3 bg-amber-50 rounded-xl text-sm text-left space-y-2">
                     <p class="font-bold text-amber-800">This session was paid from a prepaid bundle</p>
@@ -424,7 +453,7 @@ export async function handleRemoval(regId, sid, name, playerId, paymentStatus, o
             }
             await logAction('PLAYER_REMOVED',
                 `${logDetails} (prepaid session kept as used, ${result.value.infractionType} logged)`,
-                name, sid);
+                name, sid, playerId || null);
             if (onComplete) await onComplete();
             Swal.fire({
                 toast: true, position: 'top', icon: 'success',
@@ -437,7 +466,7 @@ export async function handleRemoval(regId, sid, name, playerId, paymentStatus, o
         const { error } = await _supabase.from('registrations').delete().eq('id', regId);
 
         if (!error) {
-            await logAction('PLAYER_REMOVED', prepaidLink ? `${logDetails} (prepaid session returned)` : logDetails, name, sid);
+            await logAction('PLAYER_REMOVED', prepaidLink ? `${logDetails} (prepaid session returned)` : logDetails, name, sid, playerId || null);
 
             const wantsReassign = result.value && result.value.reassign;
             const reassignResult = wantsReassign
@@ -473,7 +502,19 @@ export async function handleRemoval(regId, sid, name, playerId, paymentStatus, o
     }
 }
 
+let joinInFlight = false;
+
 export async function joinSession(onComplete) {
+    if (joinInFlight) return;
+    joinInFlight = true;
+    try {
+        await joinSessionInner(onComplete);
+    } finally {
+        joinInFlight = false;
+    }
+}
+
+async function joinSessionInner(onComplete) {
     const playerId = document.getElementById('join-player-id').value;
     const player = state.masterPlayers.find(p => p.id == playerId);
     const session = state.allData.find(s => s.id === state.currentSessionId);
@@ -502,7 +543,7 @@ export async function joinSession(onComplete) {
     if (isAlreadyRegistered) {
         Swal.fire({
             title: 'Already Registered',
-            text: `${player.name} is already on the list for this session!`,
+            text: `${player.name} is already on the list for this session!`, // Swal `text` is not parsed as HTML
             icon: 'warning',
             confirmButtonColor: '#2563eb',
             customClass: { popup: 'rounded-3xl' }
@@ -533,7 +574,7 @@ export async function joinSession(onComplete) {
     if (!error) {
         const actionVerb = state.isAdmin ? `${state.adminName} added ${player.name} to` : `${player.name} joined`;
         const logMessage = `${actionVerb} session on ${session.date} (${displayTime}), Status: ${status}`;
-        await logAction('PLAYER_JOINED_SESSION', logMessage, player.name, session.id);
+        await logAction('PLAYER_JOINED_SESSION', logMessage, player.name, session.id, player.id);
 
         const isConfirmed = status === 'Confirmed';
         const modalIcon = isConfirmed ? 'success' : 'warning';
@@ -547,10 +588,10 @@ export async function joinSession(onComplete) {
             title: isConfirmed ? 'Booking Confirmed!' : 'Added to Waitlist',
             html: `
                 <div class="text-left bg-gray-50 p-4 rounded-2xl mt-2 text-sm">
-                    <p class="mb-1"><strong>Player:</strong> ${player.name}</p>
+                    <p class="mb-1"><strong>Player:</strong> ${esc(player.name)}</p>
                     <p class="mb-1"><strong>Session:</strong> ${displayTime}</p>
                     <p class="mb-1"><strong>Date:</strong> ${formatDateWithDay(session.date)}</p>
-                    <p><strong>Venue:</strong> ${session.location}</p>
+                    <p><strong>Venue:</strong> ${esc(session.location)}</p>
                 </div>
                 <p class="mt-4 text-xs text-gray-400 font-bold uppercase tracking-widest">${footerText}</p>
             `,
@@ -564,6 +605,15 @@ export async function joinSession(onComplete) {
         });
 
         if (onComplete) await onComplete();
+    } else if (error.code === '23505') {
+        // Unique violation (only if the database has a unique player/session
+        // constraint): someone else added this player a moment ago.
+        Swal.fire({ title: 'Already Registered', text: `${player.name} is already on the list for this session!`, icon: 'warning', confirmButtonColor: '#2563eb', customClass: { popup: 'rounded-3xl' } });
+        if (onComplete) await onComplete();
+    } else {
+        // Previously a failed insert showed nothing at all.
+        console.error('Join failed:', error.message);
+        Swal.fire({ title: 'Could not join', text: 'Something went wrong adding you to the session. Please try again.', icon: 'error', confirmButtonColor: '#2563eb', customClass: { popup: 'rounded-3xl' } });
     }
 }
 
@@ -632,7 +682,18 @@ export async function promoteFromWaitlist(regId, sid, name, onComplete) {
     }
 
     const session = state.allData.find(s => s.id === sid);
-    const spotsLeft = session.capacity - session.players.length;
+    if (!session) return;
+
+    // Count confirmed players live. state.allData can be stale if the page has
+    // been open for a while, which could let a promote overfill the session.
+    let confirmedNow = session.players.length;
+    const { count, error: countError } = await _supabase
+        .from('registrations')
+        .select('id', { count: 'exact', head: true })
+        .eq('session_id', sid)
+        .eq('status', 'Confirmed');
+    if (!countError && count !== null) confirmedNow = count;
+    const spotsLeft = session.capacity - confirmedNow;
 
     if (spotsLeft <= 0) {
         Swal.fire({
@@ -651,11 +712,15 @@ export async function promoteFromWaitlist(regId, sid, name, onComplete) {
         .eq('id', regId);
 
     if (!error) {
-        await logAction('PLAYER_PROMOTED', `${state.adminName} promoted ${name} to confirmed list`, name, sid);
+        const reg = findRegistration(sid, regId);
+        await logAction('PLAYER_PROMOTED', `${state.adminName} promoted ${name} to confirmed list`, name, sid, reg ? reg.player_id : null);
         Swal.fire({
             toast: true, position: 'top', icon: 'success',
             title: `${name} promoted!`, showConfirmButton: false, timer: 2000
         });
         if (onComplete) await onComplete();
+    } else {
+        console.error('Promote failed:', error.message);
+        Swal.fire('Error', 'Could not promote that player. Please try again.', 'error');
     }
 }

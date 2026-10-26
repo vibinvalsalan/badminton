@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+    <meta charset="UTF-8">
+    <!-- No maximum-scale / user-scalable=0 here: people must be able to pinch-zoom this page. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rules &amp; FAQ | Badminton Manager Pro</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        html { scroll-behavior: smooth; }
+        /* Section headings sit below the sticky bar when jumped to. */
+        [id] { scroll-margin-top: 5rem; }
+
+        /* Visible keyboard focus everywhere. */
+        a:focus-visible, button:focus-visible, summary:focus-visible {
+            outline: 3px solid #1d4ed8;
+            outline-offset: 2px;
+            border-radius: 0.5rem;
+        }
+
+        .skip-link {
+            position: absolute; left: 0.75rem; top: -4rem; z-index: 100;
+            background: #1e3a8a; color: #fff; padding: 0.75rem 1rem; border-radius: 0.75rem; font-weight: 700;
+        }
+        .skip-link:focus { top: 0.75rem; }
+
+        /* FAQ: native <details>, so it works from the keyboard and screen readers with no script. */
+        details > summary { list-style: none; cursor: pointer; min-height: 48px; }
+        .touch-target { min-height: 44px; }
+        .touch-target-lg { min-height: 48px; }
+        details > summary::-webkit-details-marker { display: none; }
+        details[open] > summary .chev { transform: rotate(180deg); }
+        .chev { transition: transform 0.2s ease; flex-shrink: 0; }
+
+        @media (prefers-reduced-motion: reduce) {
+            html { scroll-behavior: auto; }
+            .chev { transition: none; }
+        }
+
+        @media print {
+            nav, .no-print, .skip-link { display: none !important; }
+            body { background: #fff !important; }
+            .card { box-shadow: none !important; border: 1px solid #ccc !important; break-inside: avoid; }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans text-gray-900 leading-relaxed">
+
+    <a href="#main" class="skip-link">Skip to main content</a>
+
+    <nav aria-label="Site" class="bg-blue-600 text-white p-4 shadow-lg sticky top-0 z-50 flex items-center gap-3">
+        <a href="index.html" class="inline-flex items-center justify-center w-11 h-11 -ml-2 hover:bg-blue-700 rounded-full transition-colors" aria-label="Back to available sessions">
+            <svg class="w-6 h-6" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+        </a>
+        <p class="font-black tracking-tight text-lg uppercase">🏸 Rules &amp; FAQ</p>
+    </nav>
+
+    <main id="main" class="container mx-auto p-4 max-w-2xl space-y-6 pb-16">
+
+        <header>
+            <h1 class="text-2xl font-black tracking-tight text-gray-900">Session rules &amp; FAQ</h1>
+            <p class="mt-2 text-gray-700">Please read these carefully before joining a session. They keep the games fair and friendly for everyone.</p>
+        </header>
+
+        <!-- At a glance -->
+        <section aria-labelledby="glance-heading" class="card bg-blue-50 border border-blue-200 rounded-3xl p-5">
+            <h2 id="glance-heading" class="text-base font-black text-blue-900">The short version</h2>
+            <ul class="mt-3 space-y-2 text-blue-900">
+                <li><strong>Cancel</strong> at least <strong>48 hours</strong> before the session starts.</li>
+                <li><strong>Pay</strong> at least <strong>24 hours</strong> before the session starts.</li>
+                <li>Cancelling <strong>within 24 hours</strong> counts as a <strong>No-Show</strong>, and the fee is non-refundable.</li>
+                <li>Replacements are welcome, but they must <strong>pay</strong>.</li>
+            </ul>
+        </section>
+
+        <!-- Contents -->
+        <nav aria-labelledby="toc-heading" class="card bg-white border border-gray-200 rounded-3xl p-5 no-print">
+            <h2 id="toc-heading" class="text-base font-black text-gray-900">On this page</h2>
+            <ol class="mt-3 space-y-1 list-decimal list-inside text-blue-800">
+                <li><a class="underline font-semibold py-2 inline-block" href="#details">Where and when</a></li>
+                <li><a class="underline font-semibold py-2 inline-block" href="#rules">Session rules</a></li>
+                <li><a class="underline font-semibold py-2 inline-block" href="#chat">Group chat rules</a></li>
+                <li><a class="underline font-semibold py-2 inline-block" href="#faq">Frequently asked questions</a></li>
+            </ol>
+        </nav>
+
+        <!-- 1. Where and when -->
+        <section id="details" aria-labelledby="details-heading" class="card bg-white border border-gray-200 rounded-3xl p-5 shadow-sm">
+            <h2 id="details-heading" class="text-xl font-black text-gray-900">1. Where and when</h2>
+
+            <dl class="mt-4 space-y-4">
+                <div>
+                    <dt class="text-sm font-black uppercase tracking-wide text-gray-600">Location</dt>
+                    <dd class="mt-1 text-gray-900">
+                        <address class="not-italic">
+                            Oasis Academy Salford<br>
+                            King William St<br>
+                            Salford<br>
+                            M50 3UQ
+                        </address>
+                        <a class="inline-block mt-2 py-2 text-blue-800 underline font-semibold" href="https://maps.app.goo.gl/2E132EdtgRi1aExw6" target="_blank" rel="noopener noreferrer">View on Google Maps<span class="sr-only"> (opens in a new tab)</span></a>
+                    </dd>
+                </div>
+                <div>
+                    <dt class="text-sm font-black uppercase tracking-wide text-gray-600">Sessions</dt>
+                    <dd class="mt-1 text-gray-900">
+                        <ul class="space-y-1">
+                            <li><strong>Thursday</strong> evening, 9:00 pm to 10:00 pm</li>
+                            <li><strong>Sunday</strong> evening, 7:00 pm to 8:00 pm</li>
+                        </ul>
+                    </dd>
+                </div>
+            </dl>
+        </section>
+
+        <!-- 2. Session rules -->
+        <section id="rules" aria-labelledby="rules-heading" class="card bg-white border border-gray-200 rounded-3xl p-5 shadow-sm">
+            <h2 id="rules-heading" class="text-xl font-black text-gray-900">2. Session rules</h2>
+
+            <h3 class="mt-5 text-base font-black text-gray-900">Cancellations</h3>
+            <ol class="mt-2 space-y-3 list-decimal list-outside pl-6">
+                <li>Any cancellation must be made <strong>at least 48 hours</strong> before the session start time.</li>
+                <li>Last-minute cancellations affect the game for everyone, so please be mindful.</li>
+                <li>Any cancellation <strong>within 24 hours</strong> of the session will be treated as a <strong>No-Show</strong>, and the session fee will be <strong>non-refundable</strong>.</li>
+            </ol>
+
+            <h3 class="mt-6 text-base font-black text-gray-900">Replacements</h3>
+            <ol class="mt-2 space-y-3 list-decimal list-outside pl-6" start="4">
+                <li>Players who cancel may arrange their own replacement and settle payment directly, outside of the admin.</li>
+                <li><strong>No free play for replacement players.</strong> All replacements must be willing to pay.</li>
+            </ol>
+
+            <h3 class="mt-6 text-base font-black text-gray-900">Payments</h3>
+            <ol class="mt-2 space-y-3 list-decimal list-outside pl-6" start="6">
+                <li>The payment per player will be finalised <strong>24 hours before</strong> the session, based on the total number of confirmed players.</li>
+                <li>All payments must be made <strong>at least 24 hours before</strong> the session start time.</li>
+            </ol>
+
+            <h3 class="mt-6 text-base font-black text-gray-900">Exception: kids (under 16)</h3>
+            <p class="mt-2">
+                Kids are allowed to play only if there are spaces available due to cancellations, or if existing players are happy to include them in the game. These rules do not otherwise apply to kids.
+            </p>
+        </section>
+
+        <!-- 3. Group chat rules -->
+        <section id="chat" aria-labelledby="chat-heading" class="card bg-white border border-gray-200 rounded-3xl p-5 shadow-sm">
+            <h2 id="chat-heading" class="text-xl font-black text-gray-900">3. Group chat rules</h2>
+            <ol class="mt-4 space-y-3 list-decimal list-outside pl-6">
+                <li>Please be polite and respectful at all times.</li>
+                <li>No hate speech, and no political or religious debates in the group.</li>
+                <li>Keep the chat friendly. Have a laugh and enjoy healthy play.</li>
+                <li>No personal attacks or arguments.</li>
+                <li>No business promotion or advertising.</li>
+                <li>No messages after <strong>11:00 pm</strong>, unless it is urgent or admin-related.</li>
+                <li>The admin reserves the right to delete any messages that are inappropriate or off-topic.</li>
+            </ol>
+            <p class="mt-5 font-semibold text-gray-900">Thank you for your understanding and cooperation 😊</p>
+        </section>
+
+        <!-- 4. FAQ -->
+        <section id="faq" aria-labelledby="faq-heading" class="card bg-white border border-gray-200 rounded-3xl p-5 shadow-sm">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <h2 id="faq-heading" class="text-xl font-black text-gray-900">4. Frequently asked questions</h2>
+                <button type="button" id="faq-toggle-all" class="no-print touch-target text-sm font-bold text-blue-800 underline px-2" aria-controls="faq-list">Expand all answers</button>
+            </div>
+
+            <div id="faq-list" class="mt-3 divide-y divide-gray-200">
+
+                <details class="py-1">
+                    <summary class="flex items-center justify-between gap-3 py-2 font-bold text-gray-900">
+                        <span>When and where are the sessions?</span>
+                        <svg class="chev w-5 h-5 text-gray-600" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </summary>
+                    <div class="pb-3 text-gray-800 space-y-2">
+                        <p>Thursday evenings from 9:00 pm to 10:00 pm, and Sunday evenings from 7:00 pm to 8:00 pm, at Oasis Academy Salford, King William St, Salford, M50 3UQ.</p>
+                        <p><a class="text-blue-800 underline font-semibold" href="#details">See the full details</a></p>
+                    </div>
+                </details>
+
+                <details class="py-1">
+                    <summary class="flex items-center justify-between gap-3 py-2 font-bold text-gray-900">
+                        <span>How do I join a session?</span>
+                        <svg class="chev w-5 h-5 text-gray-600" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </summary>
+                    <div class="pb-3 text-gray-800 space-y-2">
+                        <p>Open the session from the home page, type your name, pick it from the list and press <strong>Join</strong>. If there is a free spot you are confirmed straight away.</p>
+                    </div>
+                </details>
+
+                <details class="py-1">
+                    <summary class="flex items-center justify-between gap-3 py-2 font-bold text-gray-900">
+                        <span>What happens if the session is full?</span>
+                        <svg class="chev w-5 h-5 text-gray-600" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </summary>
+                    <div class="pb-3 text-gray-800 space-y-2">
+                        <p>You are added to the <strong>waiting list</strong>. When a spot opens up it goes to the people already waiting first, and the admin moves players up from the waiting list. Check back on the session page to see if you have been confirmed.</p>
+                    </div>
+                </details>
+
+                <details class="py-1">
+                    <summary class="flex items-center justify-between gap-3 py-2 font-bold text-gray-900">
+                        <span>How do I cancel?</span>
+                        <svg class="chev w-5 h-5 text-gray-600" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </summary>
+                    <div class="pb-3 text-gray-800 space-y-2">
+                        <p>Open the session and press the <strong>✕</strong> next to your name. Please do this <strong>at least 48 hours</strong> before the session starts.</p>
+                        <p>Within 24 hours of the start the ✕ is locked and shows a padlock instead. After that point only the admin can remove a name, and the cancellation counts as a No-Show.</p>
+                    </div>
+                </details>
+
+                <details class="py-1">
+                    <summary class="flex items-center justify-between gap-3 py-2 font-bold text-gray-900">
+                        <span>What if I have to cancel at the last minute?</span>
+                        <svg class="chev w-5 h-5 text-gray-600" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </summary>
+                    <div class="pb-3 text-gray-800 space-y-2">
+                        <p>Any cancellation within 24 hours of the session is treated as a <strong>No-Show</strong> and the session fee is <strong>non-refundable</strong>.</p>
+                        <p>The best option is to find a replacement yourself (see the next question).</p>
+                    </div>
+                </details>
+
+                <details class="py-1">
+                    <summary class="flex items-center justify-between gap-3 py-2 font-bold text-gray-900">
+                        <span>Can I send someone in my place?</span>
+                        <svg class="chev w-5 h-5 text-gray-600" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </summary>
+                    <div class="pb-3 text-gray-800 space-y-2">
+                        <p>Yes. You can arrange your own replacement and settle payment with them directly, outside of the admin. There is <strong>no free play</strong> for replacements, so they must be willing to pay.</p>
+                    </div>
+                </details>
+
+                <details class="py-1">
+                    <summary class="flex items-center justify-between gap-3 py-2 font-bold text-gray-900">
+                        <span>How much do I pay, and when?</span>
+                        <svg class="chev w-5 h-5 text-gray-600" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </summary>
+                    <div class="pb-3 text-gray-800 space-y-2">
+                        <p>The amount per player is finalised <strong>24 hours before</strong> the session, based on the number of confirmed players. All payments must be made <strong>at least 24 hours before</strong> the session starts.</p>
+                    </div>
+                </details>
+
+                <details class="py-1">
+                    <summary class="flex items-center justify-between gap-3 py-2 font-bold text-gray-900">
+                        <span>How do I show that I have paid?</span>
+                        <svg class="chev w-5 h-5 text-gray-600" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </summary>
+                    <div class="pb-3 text-gray-800 space-y-2">
+                        <p>After you have sent your fee, press <strong>Mark Paid</strong> next to your name on the session page. It then shows <strong>✓ Paid</strong>.</p>
+                        <p>Pressed it by mistake? Tap <strong>✓ Paid</strong> again to switch back to unpaid.</p>
+                    </div>
+                </details>
+
+                <details class="py-1">
+                    <summary class="flex items-center justify-between gap-3 py-2 font-bold text-gray-900">
+                        <span>I have already paid but cannot make it. What do I do?</span>
+                        <svg class="chev w-5 h-5 text-gray-600" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </summary>
+                    <div class="pb-3 text-gray-800 space-y-2">
+                        <p>While your name is marked as <strong>Paid</strong> you cannot remove yourself from the list. Either switch it back to unpaid first, or contact the admin to adjust your payment.</p>
+                        <p>If your place was covered by a prepaid bundle, please contact the admin. Remember the cancellation timings in the <a class="text-blue-800 underline font-semibold" href="#rules">session rules</a> still apply.</p>
+                    </div>
+                </details>
+
+                <details class="py-1">
+                    <summary class="flex items-center justify-between gap-3 py-2 font-bold text-gray-900">
+                        <span>Can my child play?</span>
+                        <svg class="chev w-5 h-5 text-gray-600" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </summary>
+                    <div class="pb-3 text-gray-800 space-y-2">
+                        <p>Kids under 16 can play only if there are spaces available because of cancellations, or if the existing players are happy to include them in the game. The other session rules do not otherwise apply to kids.</p>
+                    </div>
+                </details>
+
+                <details class="py-1">
+                    <summary class="flex items-center justify-between gap-3 py-2 font-bold text-gray-900">
+                        <span>What are the rules for the group chat?</span>
+                        <svg class="chev w-5 h-5 text-gray-600" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </summary>
+                    <div class="pb-3 text-gray-800 space-y-2">
+                        <p>Be polite and respectful, keep it friendly, and no hate speech, personal attacks, arguments, business promotion, or political or religious debates. Please do not message after 11:00 pm unless it is urgent or admin-related.</p>
+                        <p><a class="text-blue-800 underline font-semibold" href="#chat">Read the full group chat rules</a></p>
+                    </div>
+                </details>
+
+                <details class="py-1">
+                    <summary class="flex items-center justify-between gap-3 py-2 font-bold text-gray-900">
+                        <span>Who do I contact if something is wrong?</span>
+                        <svg class="chev w-5 h-5 text-gray-600" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </summary>
+                    <div class="pb-3 text-gray-800 space-y-2">
+                        <p>Message the admin through the group chat. This covers things like adjusting a payment, removing your name inside the 24-hour lock, or anything that looks wrong on the session page.</p>
+                    </div>
+                </details>
+
+            </div>
+        </section>
+
+        <p class="text-center no-print">
+            <a href="index.html" class="inline-flex items-center justify-center touch-target-lg px-6 rounded-2xl bg-blue-700 text-white font-black uppercase tracking-widest text-xs hover:bg-blue-800">Back to available sessions</a>
+        </p>
+    </main>
+
+    <script>
+        // Expand / collapse all FAQ answers. The page works fully without this.
+        (function () {
+            var btn = document.getElementById('faq-toggle-all');
+            var items = document.querySelectorAll('#faq-list details');
+            if (!btn || !items.length) return;
+
+            function allOpen() { return Array.prototype.every.call(items, function (d) { return d.open; }); }
+            function refresh() { btn.textContent = allOpen() ? 'Collapse all answers' : 'Expand all answers'; }
+
+            btn.addEventListener('click', function () {
+                var open = !allOpen();
+                items.forEach(function (d) { d.open = open; });
+                refresh();
+            });
+            items.forEach(function (d) { d.addEventListener('toggle', refresh); });
+
+            // Open every answer when printing.
+            window.addEventListener('beforeprint', function () { items.forEach(function (d) { d.open = true; }); });
+        })();
+    </script>
+
+    <script type="module">
+        // Same visit logging as the other player pages. Failure here must never affect the page.
+        import { logVisit } from './js/audit.js';
+        try { logVisit(); } catch (e) { /* ignore */ }
+    </script>
+</body>
+</html>

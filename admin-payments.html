@@ -22,6 +22,12 @@
     </nav>
 
     <div class="container mx-auto p-4 max-w-lg space-y-4 animate-fadeIn">
+        <div class="flex bg-gray-100 p-1 rounded-2xl text-[11px] font-black uppercase tracking-wide">
+            <button id="tab-payins" class="flex-1 py-2 rounded-xl bg-gray-900 text-white transition-all">Pay-ins</button>
+            <button id="tab-consumables" class="flex-1 py-2 rounded-xl text-gray-500 transition-all">Consumables</button>
+        </div>
+
+        <div id="panel-payins" class="space-y-4">
         <div class="flex justify-between items-center mb-2">
             <h2 class="text-xl font-black uppercase tracking-tight text-gray-900">Prepaid Payments</h2>
             <span class="text-[10px] bg-blue-100 text-blue-600 px-2 py-1 rounded-lg font-bold tracking-wide">PAY-INS</span>
@@ -51,13 +57,50 @@
         <div id="payments-list" class="space-y-3">
             <div class="text-center py-12 text-gray-400 font-bold uppercase text-[10px]">Loading payments...</div>
         </div>
+        </div>
+
+        <div id="panel-consumables" class="hidden space-y-4">
+            <div class="flex justify-between items-center mb-2">
+                <h2 class="text-xl font-black uppercase tracking-tight text-gray-900">Consumables</h2>
+                <span class="text-[10px] bg-purple-100 text-purple-600 px-2 py-1 rounded-lg font-bold tracking-wide">SHUTTLES &amp; MORE</span>
+            </div>
+
+            <div id="cons-summary" class="grid grid-cols-3 gap-2"></div>
+            <div id="cons-owed"></div>
+
+            <div class="grid grid-cols-2 gap-2">
+                <button id="cons-add-purchase" class="bg-gray-900 hover:bg-gray-800 text-white font-black uppercase tracking-wider text-[11px] py-3 px-3 rounded-2xl shadow-sm flex justify-center items-center gap-2"><span>➕</span> Purchase</button>
+                <button id="cons-add-contribution" class="bg-blue-600 hover:bg-blue-700 text-white font-black uppercase tracking-wider text-[11px] py-3 px-3 rounded-2xl shadow-sm flex justify-center items-center gap-2"><span>➕</span> Contribution</button>
+            </div>
+
+            <div class="flex bg-gray-100 p-1 rounded-2xl text-[10px] font-black uppercase tracking-wide">
+                <button data-view="purchases" class="flex-1 py-2 rounded-xl bg-white text-gray-900 shadow-sm">Purchases</button>
+                <button data-view="contributions" class="flex-1 py-2 rounded-xl text-gray-500">Contributions <span id="cons-unlinked-badge" class="hidden ml-1 bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-md"></span></button>
+            </div>
+
+            <div id="cons-purchases" class="space-y-3">
+                <div class="text-center py-12 text-gray-400 font-bold uppercase text-[10px]">Loading purchases...</div>
+            </div>
+
+            <div id="cons-contributions" class="hidden space-y-3">
+                <div class="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm">
+                    <label class="text-[9px] font-black text-gray-400 uppercase ml-1">Show</label>
+                    <select id="cons-filter" class="w-full bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 outline-none text-xs font-bold text-gray-700">
+                        <option value="ALL">All contributions</option>
+                        <option value="UNLINKED">Unlinked only</option>
+                    </select>
+                </div>
+                <p id="cons-contrib-count" class="text-[10px] font-black text-gray-400 uppercase ml-1"></p>
+                <div id="cons-contrib-list" class="space-y-3"></div>
+            </div>
+        </div>
     </div>
 
     <script type="module">
         import { requireAdmin } from './js/auth-guard.js';
         import { _supabase } from './js/supabase-client.js';
         import { state } from './js/state.js';
-        import { logAction } from './js/audit.js';
+        import { logAction, logActions } from './js/audit.js';
         import { formatDateWithDay, formatTime12Hour } from './js/format.js';
         import { esc, todayStr } from './js/utils.js';
 
@@ -359,6 +402,604 @@
             else if (btn.dataset.action === 'edit') openForm(p);
             else if (btn.dataset.action === 'delete') deletePayment(p);
         });
+
+        // ===================== CONSUMABLES =====================
+        // Purchases (what was bought and who paid up front) and contributions
+        // (what players chipped in) are separate records. A contribution can
+        // optionally be linked to a purchase; collected / outstanding are
+        // calculated by the consumable_purchase_summary view.
+        const tabPayinsBtn = document.getElementById('tab-payins');
+        const tabConsBtn = document.getElementById('tab-consumables');
+        const panelPayins = document.getElementById('panel-payins');
+        const panelCons = document.getElementById('panel-consumables');
+        const summaryEl = document.getElementById('cons-summary');
+        const owedEl = document.getElementById('cons-owed');
+        const purchasesEl = document.getElementById('cons-purchases');
+        const contribWrapEl = document.getElementById('cons-contributions');
+        const contribListEl = document.getElementById('cons-contrib-list');
+        const contribCountEl = document.getElementById('cons-contrib-count');
+        const contribFilterEl = document.getElementById('cons-filter');
+        const unlinkedBadgeEl = document.getElementById('cons-unlinked-badge');
+        const viewBtns = document.querySelectorAll('[data-view]');
+
+        const cInputCls = 'w-full bg-gray-50 p-3 rounded-xl border-none ring-1 ring-gray-200 outline-none text-sm';
+        const cLabelCls = 'block text-[10px] font-black text-gray-400 uppercase mb-1 ml-1';
+        const cSwalClasses = { popup: 'rounded-3xl', confirmButton: 'rounded-xl px-6 py-3 text-sm font-bold uppercase', cancelButton: 'rounded-xl px-6 py-3 text-sm font-bold uppercase' };
+        const cMethods = ['Bank transfer', 'Cash', 'Other'];
+
+        let purchases = [];
+        let contributions = [];
+        let consLoaded = false;
+        let consView = 'purchases';
+        const openLinkedPanels = new Set(); // purchase ids whose contributions panel is open
+
+        const pName = id => id == null ? 'Not recorded' : ((players.find(p => p.id == id) || {}).name || 'Unknown player');
+        const toast = title => Swal.fire({ toast: true, position: 'top', icon: 'success', title, showConfirmButton: false, timer: 1800 });
+        const round2 = n => Math.round(n * 100) / 100;
+
+        function setTab(name) {
+            const cons = name === 'consumables';
+            panelPayins.classList.toggle('hidden', cons);
+            panelCons.classList.toggle('hidden', !cons);
+            tabPayinsBtn.className = 'flex-1 py-2 rounded-xl transition-all ' + (cons ? 'text-gray-500' : 'bg-gray-900 text-white');
+            tabConsBtn.className = 'flex-1 py-2 rounded-xl transition-all ' + (cons ? 'bg-gray-900 text-white' : 'text-gray-500');
+            history.replaceState(null, '', cons ? '#consumables' : location.pathname + location.search);
+            if (cons && !consLoaded) loadConsumables();
+        }
+
+        function setView(view) {
+            consView = view;
+            purchasesEl.classList.toggle('hidden', view !== 'purchases');
+            contribWrapEl.classList.toggle('hidden', view !== 'contributions');
+            viewBtns.forEach(b => {
+                const on = b.dataset.view === view;
+                b.className = 'flex-1 py-2 rounded-xl ' + (on ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500');
+            });
+        }
+
+        async function loadConsumables() {
+            const [pRes, cRes, plRes] = await Promise.all([
+                _supabase.from('consumable_purchase_summary').select('*')
+                    .order('purchase_date', { ascending: false })
+                    .order('created_at', { ascending: false }),
+                _supabase.from('consumable_contributions').select('*')
+                    .order('contribution_date', { ascending: false })
+                    .order('created_at', { ascending: false }),
+                _supabase.from('players').select('id, name').order('name')
+            ]);
+
+            if (pRes.error || cRes.error) {
+                console.error('Consumables fetch error:', (pRes.error || cRes.error).message);
+                purchasesEl.innerHTML = `<div class="text-center py-12 text-red-400 font-bold text-xs">Could not load consumables.<br><span class="text-[10px] text-gray-400 font-normal">Has the consumables migration been run in Supabase?</span></div>`;
+                return;
+            }
+            if (plRes.data) players = plRes.data;
+
+            purchases = (pRes.data || []).map(p => ({
+                ...p,
+                total_amount: Number(p.total_amount),
+                collected: Number(p.collected),
+                outstanding: Number(p.outstanding),
+                payer_name: pName(p.paid_by)
+            }));
+            contributions = (cRes.data || []).map(c => ({
+                ...c,
+                amount: Number(c.amount),
+                player_name: pName(c.player_id),
+                purchase: c.purchase_id ? (purchases.find(p => p.id === c.purchase_id) || null) : null
+            }));
+            consLoaded = true;
+            renderConsumables();
+        }
+
+        function renderConsumables() {
+            renderSummary();
+            renderPurchases();
+            renderContributions();
+        }
+
+        function renderSummary() {
+            const spent = purchases.reduce((s, p) => s + p.total_amount, 0);
+            const contributed = contributions.reduce((s, c) => s + c.amount, 0);
+            const unlinkedList = contributions.filter(c => !c.purchase_id);
+            const unlinkedTotal = unlinkedList.reduce((s, c) => s + c.amount, 0);
+
+            const tile = (label, value, cls) => `
+                <div class="bg-white border border-gray-100 rounded-2xl shadow-sm p-3 text-center">
+                    <p class="text-[9px] font-black uppercase text-gray-400">${label}</p>
+                    <p class="font-black text-sm ${cls}">${money(value)}</p>
+                </div>`;
+            summaryEl.innerHTML =
+                tile('Spent', spent, 'text-gray-900') +
+                tile('Contributed', contributed, 'text-green-600') +
+                tile('Unlinked', unlinkedTotal, unlinkedTotal > 0 ? 'text-amber-600' : 'text-gray-400');
+
+            // Still to recover per buyer (only purchases that are not yet covered).
+            const owed = new Map();
+            purchases.filter(p => p.outstanding > 0.004).forEach(p => {
+                const key = p.paid_by == null ? 'Not recorded' : p.payer_name;
+                owed.set(key, round2((owed.get(key) || 0) + p.outstanding));
+            });
+            if (owed.size === 0) { owedEl.innerHTML = ''; }
+            else {
+                owedEl.innerHTML = `
+                    <div class="bg-white border border-gray-100 rounded-2xl shadow-sm p-3">
+                        <p class="text-[9px] font-black uppercase text-gray-400 mb-1.5">Still to recover for buyers</p>
+                        <div class="space-y-1">${[...owed.entries()].map(([name, amt]) => `
+                            <div class="flex justify-between text-[11px]"><span class="font-bold text-gray-700">${esc(name)}</span><span class="font-black text-amber-600">${money(amt)}</span></div>`).join('')}
+                        </div>
+                    </div>`;
+            }
+
+            if (unlinkedList.length) {
+                unlinkedBadgeEl.textContent = `${unlinkedList.length} unlinked`;
+                unlinkedBadgeEl.classList.remove('hidden');
+            } else {
+                unlinkedBadgeEl.classList.add('hidden');
+            }
+        }
+
+        function statusChip(status) {
+            const cls = status === 'Settled' ? 'bg-green-100 text-green-700'
+                : status === 'Over-collected' ? 'bg-purple-100 text-purple-700'
+                : 'bg-amber-100 text-amber-700';
+            return `<span class="text-[9px] font-black uppercase px-2 py-1 rounded-lg ${cls}">${esc(status)}</span>`;
+        }
+
+        function renderPurchases() {
+            if (purchases.length === 0) {
+                purchasesEl.innerHTML = `<div class="text-center py-12 text-gray-400 font-bold uppercase text-[10px]">No purchases recorded yet</div>`;
+                return;
+            }
+            purchasesEl.innerHTML = purchases.map(p => {
+                const linked = contributions.filter(c => c.purchase_id === p.id);
+                const pct = p.total_amount > 0 ? Math.min(100, Math.round((p.collected / p.total_amount) * 100)) : 100;
+                const barCls = p.status === 'Over-collected' ? 'bg-purple-500' : p.status === 'Settled' ? 'bg-green-500' : 'bg-blue-500';
+                const note = p.outstanding > 0.004 ? `${money(p.outstanding)} to go`
+                    : p.outstanding < -0.004 ? `<span class="text-purple-600 font-bold">${money(-p.outstanding)} over-collected</span>`
+                    : 'Fully covered';
+                return `
+                <div class="bg-white border border-gray-100 rounded-2xl shadow-sm p-4" data-card="${p.id}">
+                    <div class="flex justify-between items-start gap-2">
+                        <div>
+                            <p class="font-black text-gray-900">${esc(p.item)}${p.quantity ? ` <span class="text-gray-400 font-bold text-xs">× ${p.quantity}</span>` : ''}</p>
+                            <p class="text-[10px] text-gray-400 font-bold uppercase">${money(p.total_amount)} · paid by ${esc(p.payer_name)} · ${fmtDate(p.purchase_date)}</p>
+                        </div>
+                        ${statusChip(p.status)}
+                    </div>
+
+                    <div class="mt-3">
+                        <div class="flex justify-between text-[10px] font-black uppercase mb-1">
+                            <span class="text-gray-500">${money(p.collected)} of ${money(p.total_amount)} collected</span>
+                            <span class="text-blue-600">${linked.length} contribution${linked.length === 1 ? '' : 's'}</span>
+                        </div>
+                        <div class="h-2 bg-gray-100 rounded-full overflow-hidden"><div class="h-2 ${barCls} rounded-full" style="width:${pct}%"></div></div>
+                        <p class="text-[10px] text-gray-400 mt-1">${note}</p>
+                    </div>
+
+                    ${p.notes ? `<p class="text-[10px] text-gray-500 mt-2"><span class="font-black uppercase text-gray-400">Notes:</span> ${esc(p.notes)}</p>` : ''}
+
+                    <div class="grid grid-cols-3 gap-2 mt-3">
+                        <button data-action="toggle-linked" data-id="${p.id}" class="bg-gray-100 text-gray-700 font-black text-[10px] uppercase py-2 rounded-xl">List (${linked.length})</button>
+                        <button data-action="add-contribution" data-id="${p.id}" class="bg-green-50 text-green-700 font-black text-[10px] uppercase py-2 rounded-xl">+ Add</button>
+                        <button data-action="link-existing" data-id="${p.id}" class="bg-amber-50 text-amber-700 font-black text-[10px] uppercase py-2 rounded-xl">Link</button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 mt-2">
+                        <button data-action="edit" data-id="${p.id}" class="bg-blue-50 text-blue-700 font-black text-[10px] uppercase py-2 rounded-xl">Edit</button>
+                        <button data-action="delete" data-id="${p.id}" class="bg-red-50 text-red-600 font-black text-[10px] uppercase py-2 rounded-xl">Delete</button>
+                    </div>
+
+                    <div id="linked-${p.id}" class="hidden mt-3 pt-3 border-t border-gray-100"></div>
+                </div>`;
+            }).join('');
+
+            openLinkedPanels.forEach(id => {
+                if (document.getElementById(`linked-${id}`)) fillLinked(id);
+                else openLinkedPanels.delete(id);
+            });
+        }
+
+        function fillLinked(id) {
+            const box = document.getElementById(`linked-${id}`);
+            if (!box) return;
+            box.classList.remove('hidden');
+            const rows = contributions.filter(c => c.purchase_id === id);
+            if (rows.length === 0) {
+                box.innerHTML = `<p class="text-center text-gray-400 text-[10px] font-bold uppercase py-2">No contributions linked yet</p>`;
+                return;
+            }
+            box.innerHTML = `<div class="space-y-1.5">` + rows.map(c => `
+                <div class="flex justify-between items-center gap-2 bg-gray-50 rounded-xl px-3 py-2 text-[11px]">
+                    <span class="flex-1 text-gray-700 font-semibold">${esc(c.player_name)}<br><span class="text-[10px] text-gray-400 font-normal">${fmtDate(c.contribution_date)}${c.method ? ' · ' + esc(c.method) : ''}</span></span>
+                    <span class="font-black text-green-600">${money(c.amount)}</span>
+                    <button data-action="unlink" data-cid="${c.id}" class="text-[9px] font-black uppercase text-amber-700 bg-amber-50 px-2 py-1 rounded-lg">Unlink</button>
+                </div>`).join('') + `</div>`;
+        }
+
+        function toggleLinked(id) {
+            const box = document.getElementById(`linked-${id}`);
+            if (!box) return;
+            if (!box.classList.contains('hidden')) {
+                box.classList.add('hidden');
+                openLinkedPanels.delete(id);
+                return;
+            }
+            openLinkedPanels.add(id);
+            fillLinked(id);
+        }
+
+        function renderContributions() {
+            const onlyUnlinked = contribFilterEl.value === 'UNLINKED';
+            const rows = contributions.filter(c => !onlyUnlinked || !c.purchase_id);
+            contribCountEl.innerText = `${rows.length} contribution${rows.length === 1 ? '' : 's'}`;
+
+            if (rows.length === 0) {
+                contribListEl.innerHTML = `<div class="text-center py-12 text-gray-400 font-bold uppercase text-[10px]">${onlyUnlinked ? 'Everything is linked' : 'No contributions recorded yet'}</div>`;
+                return;
+            }
+            contribListEl.innerHTML = rows.map(c => {
+                const badge = c.purchase_id
+                    ? `<span class="text-[9px] font-black uppercase px-2 py-1 rounded-lg bg-blue-50 text-blue-700">→ ${esc(c.purchase ? c.purchase.item : 'Purchase')}</span>`
+                    : `<span class="text-[9px] font-black uppercase px-2 py-1 rounded-lg bg-amber-100 text-amber-700">Unlinked</span>`;
+                return `
+                <div class="bg-white border ${c.purchase_id ? 'border-gray-100' : 'border-amber-200'} rounded-2xl shadow-sm p-4">
+                    <div class="flex justify-between items-start gap-2">
+                        <div>
+                            <p class="font-black text-gray-900">${esc(c.player_name)} <span class="text-green-600">${money(c.amount)}</span></p>
+                            <p class="text-[10px] text-gray-400 font-bold uppercase">${fmtDate(c.contribution_date)}${c.method ? ' · ' + esc(c.method) : ''}</p>
+                        </div>
+                        ${badge}
+                    </div>
+                    ${c.notes ? `<p class="text-[10px] text-gray-500 mt-2"><span class="font-black uppercase text-gray-400">Notes:</span> ${esc(c.notes)}</p>` : ''}
+                    <div class="grid grid-cols-3 gap-2 mt-3">
+                        <button data-action="link" data-id="${c.id}" class="bg-amber-50 text-amber-700 font-black text-[10px] uppercase py-2 rounded-xl">${c.purchase_id ? 'Relink' : 'Link'}</button>
+                        <button data-action="edit" data-id="${c.id}" class="bg-blue-50 text-blue-700 font-black text-[10px] uppercase py-2 rounded-xl">Edit</button>
+                        <button data-action="delete" data-id="${c.id}" class="bg-red-50 text-red-600 font-black text-[10px] uppercase py-2 rounded-xl">Delete</button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        // ---- Purchase form (add + edit) ----
+        async function openPurchaseForm(existing) {
+            const isEdit = !!existing;
+            const playerOpts = `<option value="">Select who paid...</option>` + players.map(pl =>
+                `<option value="${pl.id}" ${isEdit && existing.paid_by == pl.id ? 'selected' : ''}>${esc(pl.name)}</option>`).join('');
+
+            const result = await Swal.fire({
+                title: isEdit ? 'Edit Purchase' : 'Add Purchase',
+                html: `
+                    <div class="text-left space-y-3 mt-2">
+                        <div><label class="${cLabelCls}">Item</label>
+                            <input id="cp-item" type="text" class="${cInputCls}" value="${isEdit ? esc(existing.item) : ''}" placeholder="e.g. Yonex AS30 shuttles"></div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div><label class="${cLabelCls}">Total cost (£)</label>
+                                <input id="cp-total" type="number" step="0.01" min="0" inputmode="decimal" class="${cInputCls}" value="${isEdit ? existing.total_amount : ''}"></div>
+                            <div><label class="${cLabelCls}">Quantity (optional)</label>
+                                <input id="cp-qty" type="number" step="1" min="1" inputmode="numeric" class="${cInputCls}" value="${isEdit && existing.quantity ? existing.quantity : ''}"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div><label class="${cLabelCls}">Paid by</label>
+                                <select id="cp-payer" class="${cInputCls}">${playerOpts}</select></div>
+                            <div><label class="${cLabelCls}">Date bought</label>
+                                <input id="cp-date" type="date" class="${cInputCls}" value="${isEdit ? existing.purchase_date : todayStr()}"></div>
+                        </div>
+                        <div><label class="${cLabelCls}">Notes (optional)</label>
+                            <textarea id="cp-notes" rows="2" class="${cInputCls}">${isEdit ? esc(existing.notes || '') : ''}</textarea></div>
+                    </div>`,
+                showCancelButton: true,
+                confirmButtonText: isEdit ? 'Save changes' : 'Add purchase',
+                confirmButtonColor: '#2563eb',
+                cancelButtonColor: '#6b7280',
+                reverseButtons: true,
+                customClass: cSwalClasses,
+                preConfirm: () => {
+                    const item = document.getElementById('cp-item').value.trim();
+                    const total = parseFloat(document.getElementById('cp-total').value);
+                    const qtyRaw = document.getElementById('cp-qty').value;
+                    const qty = qtyRaw === '' ? null : parseInt(qtyRaw, 10);
+                    const payer = document.getElementById('cp-payer').value;
+                    const date = document.getElementById('cp-date').value;
+                    if (!item) return Swal.showValidationMessage('Please enter what was bought');
+                    if (!(total >= 0)) return Swal.showValidationMessage('Enter the total cost');
+                    if (qty !== null && (!Number.isInteger(qty) || qty < 1)) return Swal.showValidationMessage('Quantity must be a whole number of at least 1');
+                    if (!payer) return Swal.showValidationMessage('Please select who paid');
+                    if (!date) return Swal.showValidationMessage('Please choose the date bought');
+                    return {
+                        item,
+                        total_amount: round2(total),
+                        quantity: qty,
+                        paid_by: Number(payer),
+                        purchase_date: date,
+                        notes: document.getElementById('cp-notes').value.trim() || null
+                    };
+                }
+            });
+
+            if (!result.isConfirmed) return;
+            const v = result.value;
+            const payerName = pName(v.paid_by);
+
+            if (isEdit) {
+                const { error } = await _supabase.from('consumable_purchases').update(v).eq('id', existing.id);
+                if (error) return Swal.fire('Error', 'Could not save changes. Please try again.', 'error');
+                await logAction('CONSUMABLE_PURCHASE_UPDATED',
+                    `${state.adminName} updated purchase "${v.item}": ${money(v.total_amount)} paid by ${payerName}`,
+                    payerName, null, v.paid_by);
+            } else {
+                const { error } = await _supabase.from('consumable_purchases').insert([v]);
+                if (error) return Swal.fire('Error', 'Could not add the purchase. Please try again.', 'error');
+                await logAction('CONSUMABLE_PURCHASE_ADDED',
+                    `${state.adminName} recorded purchase "${v.item}": ${money(v.total_amount)} paid by ${payerName}`,
+                    payerName, null, v.paid_by);
+            }
+            toast(isEdit ? 'Purchase updated' : 'Purchase added');
+            await loadConsumables();
+        }
+
+        async function deletePurchase(p) {
+            const linkedCount = contributions.filter(c => c.purchase_id === p.id).length;
+            const confirm = await Swal.fire({
+                title: 'Delete purchase?',
+                html: `This removes <b>${esc(p.item)}</b> (${money(p.total_amount)}).` +
+                    (linkedCount ? ` Its ${linkedCount} linked contribution${linkedCount === 1 ? '' : 's'} will be kept but become unlinked.` : ''),
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#6b7280',
+                confirmButtonText: 'Yes, delete it',
+                reverseButtons: true,
+                customClass: cSwalClasses
+            });
+            if (!confirm.isConfirmed) return;
+
+            const { error } = await _supabase.from('consumable_purchases').delete().eq('id', p.id);
+            if (error) return Swal.fire('Error', 'Could not delete the purchase. Please try again.', 'error');
+            await logAction('CONSUMABLE_PURCHASE_DELETED',
+                `${state.adminName} deleted purchase "${p.item}" (${money(p.total_amount)}, paid by ${p.payer_name})${linkedCount ? `; ${linkedCount} contribution(s) unlinked` : ''}`,
+                p.payer_name, null, p.paid_by);
+            openLinkedPanels.delete(p.id);
+            await loadConsumables();
+        }
+
+        // ---- Contribution form (add + edit) ----
+        async function openContributionForm(existing, presetPurchaseId) {
+            const isEdit = !!existing;
+            const currentMethod = isEdit ? (existing.method || '') : 'Bank transfer';
+            const methodOpts = (cMethods.includes(currentMethod) || !currentMethod ? cMethods : [...cMethods, currentMethod])
+                .map(m => `<option value="${esc(m)}" ${m === currentMethod ? 'selected' : ''}>${esc(m)}</option>`).join('');
+            const playerOpts = `<option value="">Select a player...</option>` + players.map(pl =>
+                `<option value="${pl.id}" ${isEdit && existing.player_id == pl.id ? 'selected' : ''}>${esc(pl.name)}</option>`).join('');
+            const selectedPurchase = isEdit ? existing.purchase_id : (presetPurchaseId || '');
+            const purchaseOpts = `<option value="">Not linked yet</option>` + purchases.map(p => {
+                const left = p.outstanding > 0.004 ? `${money(p.outstanding)} to go` : p.outstanding < -0.004 ? `${money(-p.outstanding)} over` : 'covered';
+                return `<option value="${p.id}" ${selectedPurchase === p.id ? 'selected' : ''}>${esc(p.item)} · ${left}</option>`;
+            }).join('');
+
+            const result = await Swal.fire({
+                title: isEdit ? 'Edit Contribution' : 'Add Contribution',
+                html: `
+                    <div class="text-left space-y-3 mt-2">
+                        <div><label class="${cLabelCls}">Player</label>
+                            <select id="cc-player" class="${cInputCls}">${playerOpts}</select></div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div><label class="${cLabelCls}">Amount (£)</label>
+                                <input id="cc-amount" type="number" step="0.01" min="0.01" inputmode="decimal" class="${cInputCls}" value="${isEdit ? existing.amount : ''}"></div>
+                            <div><label class="${cLabelCls}">Date paid</label>
+                                <input id="cc-date" type="date" class="${cInputCls}" value="${isEdit ? existing.contribution_date : todayStr()}"></div>
+                        </div>
+                        <div><label class="${cLabelCls}">Method</label>
+                            <select id="cc-method" class="${cInputCls}">${methodOpts}</select></div>
+                        <div><label class="${cLabelCls}">Link to purchase (optional)</label>
+                            <select id="cc-purchase" class="${cInputCls}">${purchaseOpts}</select></div>
+                        <div><label class="${cLabelCls}">Notes (optional)</label>
+                            <textarea id="cc-notes" rows="2" class="${cInputCls}">${isEdit ? esc(existing.notes || '') : ''}</textarea></div>
+                    </div>`,
+                showCancelButton: true,
+                confirmButtonText: isEdit ? 'Save changes' : 'Add contribution',
+                confirmButtonColor: '#2563eb',
+                cancelButtonColor: '#6b7280',
+                reverseButtons: true,
+                customClass: cSwalClasses,
+                preConfirm: () => {
+                    const playerId = document.getElementById('cc-player').value;
+                    const amount = parseFloat(document.getElementById('cc-amount').value);
+                    const date = document.getElementById('cc-date').value;
+                    if (!playerId) return Swal.showValidationMessage('Please select a player');
+                    if (!(amount > 0)) return Swal.showValidationMessage('Enter an amount greater than 0');
+                    if (!date) return Swal.showValidationMessage('Please choose the date paid');
+                    return {
+                        player_id: Number(playerId),
+                        amount: round2(amount),
+                        contribution_date: date,
+                        method: document.getElementById('cc-method').value || null,
+                        purchase_id: document.getElementById('cc-purchase').value || null,
+                        notes: document.getElementById('cc-notes').value.trim() || null
+                    };
+                }
+            });
+
+            if (!result.isConfirmed) return;
+            const v = result.value;
+            const playerName = pName(v.player_id);
+            const target = v.purchase_id ? purchases.find(p => p.id === v.purchase_id) : null;
+            const linkText = target ? ` linked to "${target.item}"` : ' (not linked)';
+
+            if (isEdit) {
+                const { error } = await _supabase.from('consumable_contributions').update(v).eq('id', existing.id);
+                if (error) return Swal.fire('Error', 'Could not save changes. Please try again.', 'error');
+                await logAction('CONSUMABLE_CONTRIBUTION_UPDATED',
+                    `${state.adminName} updated ${playerName}'s ${money(v.amount)} contribution${linkText}`,
+                    playerName, null, v.player_id);
+            } else {
+                const { error } = await _supabase.from('consumable_contributions').insert([v]);
+                if (error) return Swal.fire('Error', 'Could not add the contribution. Please try again.', 'error');
+                await logAction('CONSUMABLE_CONTRIBUTION_ADDED',
+                    `${state.adminName} recorded a ${money(v.amount)} contribution from ${playerName}${linkText}`,
+                    playerName, null, v.player_id);
+            }
+            toast(isEdit ? 'Contribution updated' : 'Contribution added');
+            await loadConsumables();
+        }
+
+        async function deleteContribution(c) {
+            const confirm = await Swal.fire({
+                title: 'Delete contribution?',
+                html: `This removes <b>${esc(c.player_name)}</b>'s ${money(c.amount)} contribution. Only do this if it was entered by mistake.`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#6b7280',
+                confirmButtonText: 'Yes, delete it',
+                reverseButtons: true,
+                customClass: cSwalClasses
+            });
+            if (!confirm.isConfirmed) return;
+
+            const { error } = await _supabase.from('consumable_contributions').delete().eq('id', c.id);
+            if (error) return Swal.fire('Error', 'Could not delete the contribution. Please try again.', 'error');
+            await logAction('CONSUMABLE_CONTRIBUTION_DELETED',
+                `${state.adminName} deleted ${c.player_name}'s ${money(c.amount)} contribution${c.purchase ? ` (was linked to "${c.purchase.item}")` : ''}`,
+                c.player_name, null, c.player_id);
+            await loadConsumables();
+        }
+
+        // ---- Linking ----
+        // Tick one or more unlinked contributions to attach to a purchase.
+        async function linkExisting(purchase) {
+            const unlinked = contributions.filter(c => !c.purchase_id);
+            if (unlinked.length === 0) {
+                return Swal.fire({ title: 'Nothing to link', text: 'There are no unlinked contributions.', icon: 'info', customClass: cSwalClasses });
+            }
+            const result = await Swal.fire({
+                title: `Link to ${purchase.item}`,
+                html: `
+                    <div class="text-left mt-2 space-y-1.5" style="max-height:50vh;overflow-y:auto">
+                        ${unlinked.map(c => `
+                            <label class="flex items-center gap-3 bg-gray-50 rounded-xl px-3 py-2 text-[12px]">
+                                <input type="checkbox" class="link-check" value="${c.id}">
+                                <span class="flex-1 font-semibold text-gray-700">${esc(c.player_name)}<br><span class="text-[10px] text-gray-400 font-normal">${fmtDate(c.contribution_date)}${c.method ? ' · ' + esc(c.method) : ''}</span></span>
+                                <span class="font-black text-green-600">${money(c.amount)}</span>
+                            </label>`).join('')}
+                    </div>`,
+                showCancelButton: true,
+                confirmButtonText: 'Link selected',
+                confirmButtonColor: '#2563eb',
+                cancelButtonColor: '#6b7280',
+                reverseButtons: true,
+                customClass: cSwalClasses,
+                preConfirm: () => {
+                    const ids = [...document.querySelectorAll('.link-check:checked')].map(i => i.value);
+                    if (ids.length === 0) return Swal.showValidationMessage('Tick at least one contribution');
+                    return ids;
+                }
+            });
+            if (!result.isConfirmed) return;
+
+            const ids = result.value;
+            const { error } = await _supabase.from('consumable_contributions').update({ purchase_id: purchase.id }).in('id', ids);
+            if (error) return Swal.fire('Error', 'Could not link the contributions. Please try again.', 'error');
+
+            // One audit entry per contribution, matching how bulk actions log elsewhere.
+            await logActions(ids.map(id => {
+                const c = contributions.find(x => x.id === id);
+                return {
+                    action: 'CONSUMABLE_CONTRIBUTION_LINKED',
+                    details: `${state.adminName} linked ${c.player_name}'s ${money(c.amount)} contribution to "${purchase.item}"`,
+                    playerName: c.player_name,
+                    playerId: c.player_id
+                };
+            }));
+            openLinkedPanels.add(purchase.id);
+            toast(`${ids.length} contribution${ids.length === 1 ? '' : 's'} linked`);
+            await loadConsumables();
+        }
+
+        // Link (or relink) a single contribution from the contributions list.
+        async function linkOne(c) {
+            if (purchases.length === 0) {
+                return Swal.fire({ title: 'No purchases yet', text: 'Add a purchase first, then link this contribution to it.', icon: 'info', customClass: cSwalClasses });
+            }
+            const inputOptions = {};
+            purchases.forEach(p => {
+                const left = p.outstanding > 0.004 ? `${money(p.outstanding)} to go` : p.outstanding < -0.004 ? `${money(-p.outstanding)} over` : 'covered';
+                inputOptions[p.id] = `${p.item} · ${left}`;
+            });
+            const result = await Swal.fire({
+                title: `Link ${c.player_name}'s ${money(c.amount)}`,
+                input: 'select',
+                inputOptions,
+                inputValue: c.purchase_id || undefined,
+                inputPlaceholder: 'Choose a purchase...',
+                inputValidator: v => !v && 'Please choose a purchase',
+                showCancelButton: true,
+                confirmButtonText: 'Link',
+                confirmButtonColor: '#2563eb',
+                cancelButtonColor: '#6b7280',
+                reverseButtons: true,
+                customClass: cSwalClasses
+            });
+            if (!result.isConfirmed) return;
+
+            const target = purchases.find(p => p.id === result.value);
+            const { error } = await _supabase.from('consumable_contributions').update({ purchase_id: result.value }).eq('id', c.id);
+            if (error) return Swal.fire('Error', 'Could not link the contribution. Please try again.', 'error');
+            await logAction('CONSUMABLE_CONTRIBUTION_LINKED',
+                `${state.adminName} linked ${c.player_name}'s ${money(c.amount)} contribution to "${target.item}"`,
+                c.player_name, null, c.player_id);
+            toast('Contribution linked');
+            await loadConsumables();
+        }
+
+        async function unlinkContribution(c) {
+            const { error } = await _supabase.from('consumable_contributions').update({ purchase_id: null }).eq('id', c.id);
+            if (error) return Swal.fire('Error', 'Could not unlink the contribution. Please try again.', 'error');
+            await logAction('CONSUMABLE_CONTRIBUTION_UNLINKED',
+                `${state.adminName} unlinked ${c.player_name}'s ${money(c.amount)} contribution${c.purchase ? ` from "${c.purchase.item}"` : ''}`,
+                c.player_name, null, c.player_id);
+            toast('Contribution unlinked');
+            await loadConsumables();
+        }
+
+        // ---- Wiring ----
+        tabPayinsBtn.addEventListener('click', () => setTab('payins'));
+        tabConsBtn.addEventListener('click', () => setTab('consumables'));
+        viewBtns.forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
+        contribFilterEl.addEventListener('change', renderContributions);
+        document.getElementById('cons-add-purchase').addEventListener('click', () => openPurchaseForm(null));
+        document.getElementById('cons-add-contribution').addEventListener('click', () => openContributionForm(null, null));
+
+        // Click delegation again, since module scripts can't be reached by inline onclick.
+        purchasesEl.addEventListener('click', e => {
+            const btn = e.target.closest('[data-action]');
+            if (!btn) return;
+            const action = btn.dataset.action;
+            if (action === 'unlink') {
+                const c = contributions.find(x => x.id === btn.dataset.cid);
+                if (c) unlinkContribution(c);
+                return;
+            }
+            const p = purchases.find(x => x.id === btn.dataset.id);
+            if (!p) return;
+            if (action === 'toggle-linked') toggleLinked(p.id);
+            else if (action === 'add-contribution') openContributionForm(null, p.id);
+            else if (action === 'link-existing') linkExisting(p);
+            else if (action === 'edit') openPurchaseForm(p);
+            else if (action === 'delete') deletePurchase(p);
+        });
+
+        contribListEl.addEventListener('click', e => {
+            const btn = e.target.closest('[data-action]');
+            if (!btn) return;
+            const c = contributions.find(x => x.id === btn.dataset.id);
+            if (!c) return;
+            if (btn.dataset.action === 'link') linkOne(c);
+            else if (btn.dataset.action === 'edit') openContributionForm(c, null);
+            else if (btn.dataset.action === 'delete') deleteContribution(c);
+        });
+
+        setView('purchases');
+        if (location.hash === '#consumables') setTab('consumables');
 
         loadAll();
     </script>
